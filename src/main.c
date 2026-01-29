@@ -26,6 +26,8 @@ static const eadk_color_t CURSOR_COLOR = 0xFCD5; // Pink, all channels
 // the first channel
 static int COLOR_IDX = 0;
 static eadk_color_t CELL_COLOR = 0xFFFF;
+static eadk_color_t DEAD_COLOR = 0x0000;
+static eadk_color_t DIFF_COLOR = 0xFFFF;
 
 typedef uint8_t cell_t;
 
@@ -41,8 +43,14 @@ static const uint8_t rules[2][10] = {
 
 static const eadk_color_t cell_colors[3] = {
     0xFFFF, // White
-    0xBECA, // CHC Spectrum C (GB)
-    0xFDCF, // Peachy Beach A (GB)
+    0xBECA, // Green
+    0xFDCF, // Peach
+};
+
+static const eadk_color_t dead_colors[3] = {
+    0x0000, // Black
+    0x4AA4, // Dark green
+    0x6246, // Dark brown
 };
 
 /* Functions */
@@ -81,7 +89,7 @@ static inline void step(cell_t* restrict p_buffer_main, cell_t* restrict p_buffe
             if (p_buffer_alt[i] != p_buffer_main[i]) {
                 eadk_display_push_rect_uniform(
                     (eadk_rect_t){ x*F, y*F, F, F },
-                    CELL_COLOR*p_buffer_alt[i]
+                    (DIFF_COLOR) * p_buffer_alt[i] + DEAD_COLOR
                 );
             }
         }
@@ -94,7 +102,7 @@ static inline void display_init_cells(const cell_t* cells) {
         for (size_t x = 0; x < W; x++, i++) {
             eadk_display_push_rect_uniform(
                 (eadk_rect_t){ x*F, y*F, F, F },
-                CELL_COLOR*cells[i]
+                (DIFF_COLOR) * cells[i] + DEAD_COLOR
             );
         }
     }
@@ -203,6 +211,8 @@ static char* yank_pattern(const cell_t* p_buffer_main, size_t* out_size, eadk_re
 static inline void _menu_color(cell_t* p_buffer_main, int col) {
     COLOR_IDX = (COLOR_IDX + 3 + col) % 3;
     CELL_COLOR = cell_colors[COLOR_IDX];
+    DEAD_COLOR = dead_colors[COLOR_IDX];
+    DIFF_COLOR = CELL_COLOR - DEAD_COLOR;
     display_init_cells(p_buffer_main);
     eadk_timing_msleep(menu_ms_delay);
 }
@@ -337,21 +347,21 @@ int main(int argc, char * argv[]) {
             // Clear cursor and selection corners
             eadk_display_push_rect_uniform(
                 (eadk_rect_t){ cursor.x*F, cursor.y*F, F, F },
-                CELL_COLOR * p_buffer_main[ IDX( cursor.x, cursor.y ) ]
+                (DIFF_COLOR) * p_buffer_main[ IDX( cursor.x, cursor.y ) ] + DEAD_COLOR
             );
 
             if (select) {
                 eadk_display_push_rect_uniform(
                     (eadk_rect_t){ selection.x*F, selection.y*F, F, F },
-                    CELL_COLOR * p_buffer_main[ IDX( selection.x, selection.y ) ]
+                    (DIFF_COLOR) * p_buffer_main[ IDX( selection.x, selection.y ) ] + DEAD_COLOR
                 );
                 eadk_display_push_rect_uniform(
                     (eadk_rect_t){ cursor.x*F, selection.y*F, F, F },
-                    CELL_COLOR * p_buffer_main[ IDX( cursor.x, selection.y ) ]
+                    (DIFF_COLOR) * p_buffer_main[ IDX( cursor.x, selection.y ) ] + DEAD_COLOR
                 );
                 eadk_display_push_rect_uniform(
                     (eadk_rect_t){ selection.x*F, cursor.y*F, F, F },
-                    CELL_COLOR * p_buffer_main[ IDX( selection.x, cursor.y ) ]
+                    (DIFF_COLOR) * p_buffer_main[ IDX( selection.x, cursor.y ) ] + DEAD_COLOR
                 );
             }
             // end if (pause)

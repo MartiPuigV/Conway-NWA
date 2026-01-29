@@ -42,12 +42,18 @@ White (0xFFFF)
 Green (0xBECA)
 Peach (0xFDCF)
 
-(Green and Peach colors come from Gameboy palettes, or so it said where i found them)
+(Green and Peach colors come [here](https://www.deviantart.com/advancedfan2020/art/Game-Boy-Palette-Set-Color-HEX-Part-12-920496174)
 
 # Future updates and planned fixes
 
-[.] Bug fixes and minor speed improvements
-[.] Code cleanup
+- Bug fixes and minor speed improvements
+- Code cleanup
+- Allow for variable canvas scale (zooming)
+- Allow multiple pattern save slots (0-9)
+- Make color scheme also change the background color
+- Allow strict or normal pasting
+    Strict: Paste dead cells onto possibly live ones, and live cells
+    Normal: Only paste live cells, ignore the dead ares of the pattern
 
 # Aknowledgements
 
