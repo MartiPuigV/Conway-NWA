@@ -22,7 +22,7 @@ Config load_config(const char* config_file) {
         size_t size = 0;
         const char* raw = extapp_fileRead(config_file, &size);
 
-        if (false && size < 3) {
+        if (size < 3) {
             // Should contain at least 3 bytes
             return default_cfg;
         }
@@ -64,17 +64,13 @@ static eadk_color_t DIFF_COLOR = 0xFFFF;
 
 typedef uint8_t cell_t;
 
-typedef struct {
-    cell_t* cells;
-} Grid;
-
 static const uint8_t rules[2][10] = {
     // Precompute the game rules for next generation
     [0] = { 0, 0, 0, 1, 0, 0, 0, 0, 0, 0 },
     [1] = { 0, 0, 1, 1, 0, 0, 0, 0, 0, 0 }
 };
 
-static const int scales[5] = { 1, 2, 4, 5, 8 };
+static const int scales[4] = { 2, 4, 5, 8 };
 
 static const eadk_color_t cell_colors[3] = {
     0xFFFF, // White
@@ -114,17 +110,17 @@ static inline uint8_t get_neighbors(const cell_t* cells, size_t x, size_t y) {
     return n;
 }
 
-static inline void step(cell_t* restrict p_buffer_main, cell_t* restrict p_buffer_alt) {
+static inline void step(cell_t* restrict buffer_main, cell_t* restrict buffer_alt) {
     size_t i = 0;
     for (size_t y = 0; y < H; y++) {
         for (size_t x = 0; x < W; x++, i++) {
-            uint8_t n = get_neighbors(p_buffer_main, x, y);
-            p_buffer_alt[i] = rules[p_buffer_main[i]][n];
+            uint8_t n = get_neighbors(buffer_main, x, y);
+            buffer_alt[i] = rules[buffer_main[i]][n];
 
-            if (p_buffer_alt[i] != p_buffer_main[i]) {
+            if (buffer_alt[i] != buffer_main[i]) {
                 eadk_display_push_rect_uniform(
                     (eadk_rect_t){ x*SCALE, y*SCALE, SCALE, SCALE },
-                    (DIFF_COLOR) * p_buffer_alt[i] + DEAD_COLOR
+                    (DIFF_COLOR) * buffer_alt[i] + DEAD_COLOR
                 );
             }
         }
@@ -143,7 +139,7 @@ static inline void display_init_cells(const cell_t* cells) {
     }
 }
 
-static inline void cells_insert_pattern(cell_t* p_buffer_main, const char* pattern, size_t size, eadk_point_t pos) {
+static inline void cells_insert_pattern(cell_t* buffer_main, const char* pattern, size_t size, eadk_point_t pos) {
     if (size < 3) {
         // File should be at least 3 bytes
         return;
@@ -161,7 +157,7 @@ static inline void cells_insert_pattern(cell_t* p_buffer_main, const char* patte
             x = px % w;
             y = px / w;
             segment = MIN(w - x, rle);
-            memset(p_buffer_main + IDX(pos.x + x, pos.y + y), color, MIN(segment, W - x));
+            memset(buffer_main + IDX(pos.x + x, pos.y + y), color, MIN(segment, W - x));
             rle -= segment;
             px += segment;
 
@@ -207,7 +203,7 @@ static char* rle_encode(const cell_t* cells, size_t size, size_t* out_size) {
     return rle;
 }
 
-static char* yank_pattern(const cell_t* p_buffer_main, size_t* out_size, eadk_rect_t area) {
+static char* yank_pattern(const cell_t* buffer_main, size_t* out_size, eadk_rect_t area) {
     // Could just use a screen yank but it's safer to copy
     // from cells and not accidentaly yank some UI pixels
     // (and probably faster too!)
@@ -225,7 +221,7 @@ static char* yank_pattern(const cell_t* p_buffer_main, size_t* out_size, eadk_re
     cell_t cells[w * h];
 
     for (size_t row = 0; row < h; row++) {
-        memcpy(cells + (row * w), p_buffer_main + IDX(x, y + row), w);
+        memcpy(cells + (row * w), buffer_main + IDX(x, y + row), w);
     }
 
     size_t rle_size = 0;
@@ -236,7 +232,7 @@ static char* yank_pattern(const cell_t* p_buffer_main, size_t* out_size, eadk_re
     // Copy at byte [3 ->
     memcpy(res+2, rle, rle_size);
     // Set header values
-    res[0] = (p_buffer_main[IDX(x, y)] << 7) | (area.width > 0xFF);
+    res[0] = (buffer_main[IDX(x, y)] << 7) | (area.width > 0xFF);
     res[1] = (area.width & 0xFF);
 
     free(rle);
@@ -244,12 +240,22 @@ static char* yank_pattern(const cell_t* p_buffer_main, size_t* out_size, eadk_re
     return res;
 }
 
-static inline void _menu_color(cell_t* p_buffer_main, int col) {
+static inline void display_message(const char* message, size_t len) {
+    eadk_display_push_rect_uniform(eadk_screen_rect, DEAD_COLOR);
+    eadk_display_draw_string(
+        message,
+        (eadk_point_t){ EADK_SCREEN_WIDTH/2 - 5*len, EADK_SCREEN_HEIGHT/2 - 10 },
+        true, CELL_COLOR, DEAD_COLOR
+    );
+    eadk_timing_msleep(menu_ms_delay);
+}
+
+static inline void _menu_color(cell_t* buffer_main, int col) {
     COLOR_IDX = (COLOR_IDX + 3 + col) % 3;
     CELL_COLOR = cell_colors[COLOR_IDX];
     DEAD_COLOR = dead_colors[COLOR_IDX];
     DIFF_COLOR = CELL_COLOR - DEAD_COLOR;
-    display_init_cells(p_buffer_main);
+    display_init_cells(buffer_main);
     eadk_timing_msleep(menu_ms_delay);
 }
 
@@ -269,17 +275,32 @@ static inline void _menu_paste_pattern(cell_t* buffer, eadk_point_t cursor) {
 }
 
 static inline void _menu_save_config() {
-    const char config[3] = { (char)SCALE_IDX, (char)COLOR_IDX, (char)FRAME_MS };
+    const char config[3] = { (char)SCALE_IDX, (char)COLOR_IDX, (char)MIN(FRAME_MS, 250) };
     extapp_fileErase(CONFIG_FILE);
     extapp_fileWrite(CONFIG_FILE, config, 3);
+    display_message("Saved config", 12);
     eadk_timing_msleep(menu_ms_delay);
+}
+
+static inline void _menu_copy_pattern(cell_t* buffer, eadk_rect_t area) {
+    size_t yank_size = 0;
+    char* selected_cells = yank_pattern(buffer, &yank_size, area);
+
+    // Avoid overwriting savefile if no pattern was yanked
+    if (selected_cells && yank_size > 0) {
+        extapp_fileErase(SAVE_FILE);
+        // Erase previous file to avoid getting multiple files with same name
+        extapp_fileWrite(SAVE_FILE, selected_cells, yank_size);
+
+        free(selected_cells);
+    }
 }
 
 int main(int argc, char * argv[]) {
     // Load config
     CONFIG = load_config(CONFIG_FILE);
-    SCALE = scales[CONFIG.scale_idx % 5];
     SCALE_IDX = CONFIG.scale_idx;
+    SCALE = scales[SCALE_IDX % 4];
     COLOR_IDX = CONFIG.color_idx;
     FRAME_MS = CONFIG.frame_ms;
 
@@ -288,8 +309,6 @@ int main(int argc, char * argv[]) {
     DIFF_COLOR = CELL_COLOR - DEAD_COLOR;
 
     // Main "global" variables
-    Grid buffer_main = {0};
-    Grid buffer_alt = {0};
     eadk_point_t cursor = { W/2, H/2 };
 
     // Selection tool for copy/paste
@@ -300,16 +319,17 @@ int main(int argc, char * argv[]) {
     eadk_display_push_rect_uniform(eadk_screen_rect, 0x0);
 
     // Allocate buffers
-    buffer_main.cells = calloc(H * W, sizeof(cell_t));
-    buffer_alt.cells = calloc(H * W, sizeof(cell_t));
+    cell_t* buffer_main = calloc(H * W, sizeof(cell_t));
+    cell_t* buffer_alt = calloc(H * W, sizeof(cell_t));
 
-    // Define pointers to both buffers for functions (pass pointer not array)
-    cell_t* p_buffer_main = buffer_main.cells;
-    cell_t* p_buffer_alt = buffer_alt.cells;
+    if (buffer_main == NULL || buffer_alt == NULL) {
+        eadk_display_draw_string("alloc failed...", (eadk_point_t){ 0, 0 }, true, eadk_color_red, eadk_color_black);
+        eadk_timing_msleep(3000);
+    }
 
     // Optional: load pattern from external_data
-    // cells_insert_pattern(p_buffer_main, eadk_external_data, eadk_external_data_size, 0, 0);
-    display_init_cells(p_buffer_main);
+    // cells_insert_pattern(buffer_main, eadk_external_data, eadk_external_data_size, 0, 0);
+    display_init_cells(buffer_main);
 
     // Menu flags
     bool pause = true;
@@ -340,22 +360,31 @@ int main(int argc, char * argv[]) {
             // Scale
 
             if (col) { // Color palette change
-                _menu_color(p_buffer_main, col);
+                _menu_color(buffer_main, col);
             }
 
             // Modification flag
             if (mod != 0 && !select) { // Don't modify when selecting cells
-                _menu_mod(p_buffer_main, cursor, mod);
+                _menu_mod(buffer_main, cursor, mod);
             }
 
             if (ms != 0) { // Change time interval between frames
-                FRAME_MS = MAX(0, FRAME_MS + 5*ms);
+                FRAME_MS = MAX(0, FRAME_MS + 10*ms);
                 eadk_timing_msleep(menu_ms_delay);
             }
 
             if (sc != 0) {
                 SCALE_IDX = (SCALE_IDX + 5 + sc) % 5;
+                display_message((sc == 1) ? "Increased scale" : "Decreased scale", 15);
                 eadk_timing_msleep(menu_ms_delay);
+                display_init_cells(buffer_main);
+            }
+
+            // Copy entire screen
+            if (eadk_keyboard_key_down(kb, eadk_event_multiplication)) {
+                display_message("Copied entire screen", 20);
+                display_init_cells(buffer_main);
+                _menu_copy_pattern(buffer_main, (eadk_rect_t){ 0, 0, W, H });
             }
 
             // Update cursor position
@@ -367,22 +396,14 @@ int main(int argc, char * argv[]) {
                 if (select) { // Selecting second point
                     uint16_t min_x = MIN(cursor.x, selection.x);
                     uint16_t min_y = MIN(cursor.y, selection.y);
+
                     selection.width = (cursor.x > selection.x) ? (cursor.x - selection.x + 1) : (selection.x - cursor.x + 1);
                     selection.height = (cursor.y > selection.y) ? (cursor.y - selection.y + 1) : (selection.y - cursor.y + 1);
+
                     selection.x = min_x;
                     selection.y = min_y;
 
-                    size_t yank_size = 0;
-                    char* selected_cells = yank_pattern(p_buffer_main, &yank_size, selection);
-
-                    // Avoid overwriting savefile if no pattern was yanked
-                    if (selected_cells && yank_size > 0) {
-                        extapp_fileErase(SAVE_FILE);
-                        // Erase previous file to avoid getting multiple files with same name
-                        extapp_fileWrite(SAVE_FILE, selected_cells, yank_size);
-
-                        free(selected_cells);
-                    }
+                    _menu_copy_pattern(buffer_main, selection);
                 } else { // Selecting first point
                     selection.x = cursor.x;
                     selection.y = cursor.y;
@@ -394,12 +415,13 @@ int main(int argc, char * argv[]) {
 
             // Pasting pattern from memory
             if (eadk_keyboard_key_down(kb, eadk_event_ans) && extapp_fileExists(SAVE_FILE)) {
-                _menu_paste_pattern(p_buffer_main, cursor);
+                _menu_paste_pattern(buffer_main, cursor);
             }
 
             // Save config
             if (eadk_keyboard_key_down(kb, eadk_event_exe)) {
                 _menu_save_config();
+                display_init_cells(buffer_main);
             }
 
             // Display cursor and selection corners
@@ -416,29 +438,29 @@ int main(int argc, char * argv[]) {
             // Clear cursor and selection corners
             eadk_display_push_rect_uniform(
                 (eadk_rect_t){ cursor.x*SCALE, cursor.y*SCALE, SCALE, SCALE },
-                (DIFF_COLOR) * p_buffer_main[ IDX( cursor.x, cursor.y ) ] + DEAD_COLOR
+                (DIFF_COLOR) * buffer_main[ IDX( cursor.x, cursor.y ) ] + DEAD_COLOR
             );
 
             if (select) {
                 eadk_display_push_rect_uniform(
                     (eadk_rect_t){ selection.x*SCALE, selection.y*SCALE, SCALE, SCALE },
-                    (DIFF_COLOR) * p_buffer_main[ IDX( selection.x, selection.y ) ] + DEAD_COLOR
+                    (DIFF_COLOR) * buffer_main[ IDX( selection.x, selection.y ) ] + DEAD_COLOR
                 );
                 eadk_display_push_rect_uniform(
                     (eadk_rect_t){ cursor.x*SCALE, selection.y*SCALE, SCALE, SCALE },
-                    (DIFF_COLOR) * p_buffer_main[ IDX( cursor.x, selection.y ) ] + DEAD_COLOR
+                    (DIFF_COLOR) * buffer_main[ IDX( cursor.x, selection.y ) ] + DEAD_COLOR
                 );
                 eadk_display_push_rect_uniform(
                     (eadk_rect_t){ selection.x*SCALE, cursor.y*SCALE, SCALE, SCALE },
-                    (DIFF_COLOR) * p_buffer_main[ IDX( selection.x, cursor.y ) ] + DEAD_COLOR
+                    (DIFF_COLOR) * buffer_main[ IDX( selection.x, cursor.y ) ] + DEAD_COLOR
                 );
             }
             // end if (pause)
         } else { // !pause, AKA run simulation
-            step(p_buffer_main, p_buffer_alt);
-            cell_t* tmp = p_buffer_main;
-            p_buffer_main = p_buffer_alt;
-            p_buffer_alt = tmp;
+            step(buffer_main, buffer_alt);
+            cell_t* tmp = buffer_main;
+            buffer_main = buffer_alt;
+            buffer_alt = tmp;
             eadk_timing_msleep(FRAME_MS);
         }
     }

@@ -2,7 +2,7 @@
 
 Conway's game of life as a Numworks App
 
-NWA is not provided here. You can compile it yourself by following the instructions
+NWA is not provided here yet. You can compile it yourself by following the instructions
 at nwagyu (yaya-cout.github.io/Nwagyu) on how to setup your environment, then running
 
 'make run'
@@ -10,50 +10,49 @@ at nwagyu (yaya-cout.github.io/Nwagyu) on how to setup your environment, then ru
 The img-tool.py is a python script to turn a black and white image into
 a conway pattern file (intended to be used as external data for the NWA)
 
-!Modify the script accordingly to change image and output paths!
+! Modify the script accordingly to change image and output paths !
 
 The src/ folder contains an input.txt file, with a glider gun pattern.
-To let the NWA know to use external data, uncomment 2 lines in src/main.c
-(Should say "Optional: ..." around those lines)
+To let the NWA know to use external data, uncomment line(s) in src/main.c
+(Should say "Optional: ...")
 
 # Controls
 
-Use OK to switch between pause (menu/edit mode) and running the simulation.
+- OK: switch between pause (menu/edit mode) and running the simulation.
 
 When in edit mode, use the arrows to control a pink cursor. Toolbox (to the
 left of backspace) and backspace can be used to draw / erase cells, in that
 order.
 
-By pressing shift, you place your first point of a selection rectangle. When
+- Shift: places your first point of a selection rectangle. When
 pressing shift a second time, the cells inside the shown rectangle will be
-locally copied in a file called "pattern.cwp" on your calculator. Use the Ans
-key to paste at your cursor.
-Pasting too close to the right edge wraps the pattern around, and too low only draws what it can.
-A prior issue where pasting too low *could* cause a reset should now be fixed.
+locally copied in a file called "pattern.cwp" on your calculator.
 
-Simulation speed can be changed with + and -.
+- Ans: Paste copied pattern at your cursor position.
 
-!They do not represent the speed, but rather the time between each frame!
+- [+] & [-]: Change simulation speed.
 
-Increasing (pressing +) the time slows down the simulation (and pressing - speeds it up).
-Pressing the division key cycles between 3 color palettes for live cells:
+! They do not represent the speed, but rather the time between each frame !
 
-White (0xFFFF)
-Green (0xBECA)
-Peach (0xFDCF)
+- / (division): Cycles between the 3 color palettes
 
-(Green and Peach colors come [here](https://www.deviantart.com/advancedfan2020/art/Game-Boy-Palette-Set-Color-HEX-Part-12-920496174)
+White
+Green
+Peach / Beige
 
-Right and left parenthesis cycle through different scales. Scales are stored in the settings file,
-and need to be saved by pressing EXE (which save current palette, current scale, and current frame
-waiting interval).
+Green and Peach colors come from [here](https://www.deviantart.com/advancedfan2020/art/Game-Boy-Palette-Set-Color-HEX-Part-12-920496174)
 
+- * (multiplication): Copies the entire screen as a pattern
+
+- "(" & ")": Cycle through 4 different scales. Changes only apply when loading settings
+at app start. 
+
+- EXE: Save current config (Color palette, grid scale, simulation speed)
 The configurations should automatically load when the app launches.
 
 # Future updates and planned fixes
 
 - Minor speed improvements
-- Code cleanup
 - Allow multiple pattern save slots (0-9)
 - Allow strict or normal pasting
     Strict: Paste dead cells onto possibly live ones, and live cells
