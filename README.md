@@ -44,13 +44,17 @@ Peach (0xFDCF)
 
 (Green and Peach colors come [here](https://www.deviantart.com/advancedfan2020/art/Game-Boy-Palette-Set-Color-HEX-Part-12-920496174)
 
+Right and left parenthesis cycle through different scales. Scales are stored in the settings file,
+and need to be saved by pressing EXE (which save current palette, current scale, and current frame
+waiting interval).
+
+The configurations should automatically load when the app launches.
+
 # Future updates and planned fixes
 
-- Bug fixes and minor speed improvements
+- Minor speed improvements
 - Code cleanup
-- Allow for variable canvas scale (zooming)
 - Allow multiple pattern save slots (0-9)
-- Make color scheme also change the background color
 - Allow strict or normal pasting
     Strict: Paste dead cells onto possibly live ones, and live cells
     Normal: Only paste live cells, ignore the dead ares of the pattern

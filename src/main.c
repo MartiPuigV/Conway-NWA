@@ -5,9 +5,43 @@
 #include <stdio.h>
 #include <stdbool.h>
 
-#define F 5             // Scaling factor
-#define H (240 / F)
-#define W (320 / F)
+// Declare config before macros
+
+typedef struct {
+    int scale_idx;
+    int color_idx;
+    int frame_ms;
+} Config;
+
+static const char* CONFIG_FILE = "conway.conf";
+
+Config load_config(const char* config_file) {
+    Config default_cfg = (Config){ 2, 0, 50 };
+
+    if (extapp_fileExists(config_file)) {
+        size_t size = 0;
+        const char* raw = extapp_fileRead(config_file, &size);
+
+        if (false && size < 3) {
+            // Should contain at least 3 bytes
+            return default_cfg;
+        }
+
+        return (Config){ raw[0], raw[1], raw[2] };
+    }
+
+    return default_cfg;
+}
+
+Config CONFIG;
+int SCALE_IDX;
+int SCALE;
+int COLOR_IDX;
+int FRAME_MS;
+
+/* Macros */
+#define H (240 / SCALE)
+#define W (320 / SCALE)
 
 #define IDX(x, y) ((y) * W + (x))
 #define MIN(a, b) (((a) < (b)) ? (a)  : (b))
@@ -20,11 +54,10 @@ const uint32_t eadk_api_level  __attribute__((section(".rodata.eadk_api_level"))
 static const int menu_ms_delay = 250;
 static const char* SAVE_FILE = "pattern.cwp";
 static const eadk_color_t CURSOR_COLOR = 0xFCD5; // Pink, all channels
-// Choose a color that uses all channels, or low F values will
+// Choose a color that uses all channels, or low SCALE values will
 // make it hard to see where the cursor is aligned. Full red
 // cursor appears to end higher than it should since red is
 // the first channel
-static int COLOR_IDX = 0;
 static eadk_color_t CELL_COLOR = 0xFFFF;
 static eadk_color_t DEAD_COLOR = 0x0000;
 static eadk_color_t DIFF_COLOR = 0xFFFF;
@@ -32,7 +65,7 @@ static eadk_color_t DIFF_COLOR = 0xFFFF;
 typedef uint8_t cell_t;
 
 typedef struct {
-    cell_t cells[H * W];
+    cell_t* cells;
 } Grid;
 
 static const uint8_t rules[2][10] = {
@@ -40,6 +73,8 @@ static const uint8_t rules[2][10] = {
     [0] = { 0, 0, 0, 1, 0, 0, 0, 0, 0, 0 },
     [1] = { 0, 0, 1, 1, 0, 0, 0, 0, 0, 0 }
 };
+
+static const int scales[5] = { 1, 2, 4, 5, 8 };
 
 static const eadk_color_t cell_colors[3] = {
     0xFFFF, // White
@@ -88,7 +123,7 @@ static inline void step(cell_t* restrict p_buffer_main, cell_t* restrict p_buffe
 
             if (p_buffer_alt[i] != p_buffer_main[i]) {
                 eadk_display_push_rect_uniform(
-                    (eadk_rect_t){ x*F, y*F, F, F },
+                    (eadk_rect_t){ x*SCALE, y*SCALE, SCALE, SCALE },
                     (DIFF_COLOR) * p_buffer_alt[i] + DEAD_COLOR
                 );
             }
@@ -101,7 +136,7 @@ static inline void display_init_cells(const cell_t* cells) {
     for (size_t y = 0; y < H; y++) {
         for (size_t x = 0; x < W; x++, i++) {
             eadk_display_push_rect_uniform(
-                (eadk_rect_t){ x*F, y*F, F, F },
+                (eadk_rect_t){ x*SCALE, y*SCALE, SCALE, SCALE },
                 (DIFF_COLOR) * cells[i] + DEAD_COLOR
             );
         }
@@ -117,21 +152,22 @@ static inline void cells_insert_pattern(cell_t* p_buffer_main, const char* patte
     cell_t color = (pattern[0] & (1 << 7)) != 0;
     size_t w = ((pattern[0] & 1) << 8)+ pattern[1];
     size_t px = 0;
+    size_t x, y, segment;
 
     for (size_t i = 2; i < size; i++) {
         char rle = pattern[i];
-        size_t x = px % w;
-        size_t y = px / w;
-
-        if (y + 1 == H) {
-            return;
-        }
 
         while (rle > 0) {
-            size_t segment = MIN(w - x, rle);
+            x = px % w;
+            y = px / w;
+            segment = MIN(w - x, rle);
             memset(p_buffer_main + IDX(pos.x + x, pos.y + y), color, MIN(segment, W - x));
             rle -= segment;
             px += segment;
+
+            if (y + 1 == H) {
+                return;
+            }
         }
 
         color = !color;
@@ -220,7 +256,7 @@ static inline void _menu_color(cell_t* p_buffer_main, int col) {
 static inline void _menu_mod(cell_t* buffer, eadk_point_t cursor, int mod) {
     eadk_color_t c = (mod == 1) ? 1 : 0; // Turns (-1, 1) into (0, 1)
     buffer[IDX(cursor.x, cursor.y)] = c;
-    eadk_display_push_rect_uniform((eadk_rect_t){ cursor.x*F, cursor.y*F, F, F }, CELL_COLOR * c);
+    eadk_display_push_rect_uniform((eadk_rect_t){ cursor.x*SCALE, cursor.y*SCALE, SCALE, SCALE }, (CELL_COLOR - DEAD_COLOR) * c + DEAD_COLOR);
 }
 
 static inline void _menu_paste_pattern(cell_t* buffer, eadk_point_t cursor) {
@@ -232,7 +268,25 @@ static inline void _menu_paste_pattern(cell_t* buffer, eadk_point_t cursor) {
     eadk_timing_msleep(menu_ms_delay);
 }
 
+static inline void _menu_save_config() {
+    const char config[3] = { (char)SCALE_IDX, (char)COLOR_IDX, (char)FRAME_MS };
+    extapp_fileErase(CONFIG_FILE);
+    extapp_fileWrite(CONFIG_FILE, config, 3);
+    eadk_timing_msleep(menu_ms_delay);
+}
+
 int main(int argc, char * argv[]) {
+    // Load config
+    CONFIG = load_config(CONFIG_FILE);
+    SCALE = scales[CONFIG.scale_idx % 5];
+    SCALE_IDX = CONFIG.scale_idx;
+    COLOR_IDX = CONFIG.color_idx;
+    FRAME_MS = CONFIG.frame_ms;
+
+    CELL_COLOR = cell_colors[COLOR_IDX];
+    DEAD_COLOR = dead_colors[COLOR_IDX];
+    DIFF_COLOR = CELL_COLOR - DEAD_COLOR;
+
     // Main "global" variables
     Grid buffer_main = {0};
     Grid buffer_alt = {0};
@@ -245,18 +299,21 @@ int main(int argc, char * argv[]) {
     // First screen reset (black)
     eadk_display_push_rect_uniform(eadk_screen_rect, 0x0);
 
+    // Allocate buffers
+    buffer_main.cells = calloc(H * W, sizeof(cell_t));
+    buffer_alt.cells = calloc(H * W, sizeof(cell_t));
+
     // Define pointers to both buffers for functions (pass pointer not array)
     cell_t* p_buffer_main = buffer_main.cells;
     cell_t* p_buffer_alt = buffer_alt.cells;
 
     // Optional: load pattern from external_data
     // cells_insert_pattern(p_buffer_main, eadk_external_data, eadk_external_data_size, 0, 0);
-    // display_init_cells(p_buffer_main);
+    display_init_cells(p_buffer_main);
 
     // Menu flags
     bool pause = true;
     bool select = false;
-    int frame_ms = 0;
 
     // Avoid app opening to cause keydown(OK)
     eadk_timing_msleep(menu_ms_delay);
@@ -278,7 +335,9 @@ int main(int argc, char * argv[]) {
             int y   = (eadk_keyboard_key_down(kb, eadk_event_down)      - eadk_keyboard_key_down(kb, eadk_event_up));
             int mod = (eadk_keyboard_key_down(kb, eadk_event_toolbox)   - eadk_keyboard_key_down(kb, eadk_event_backspace));
             int ms  = (eadk_keyboard_key_down(kb, eadk_event_plus)      - eadk_keyboard_key_down(kb, eadk_event_minus));
-            int col = eadk_keyboard_key_down(kb, eadk_event_division);
+            int col = eadk_keyboard_key_down(kb, eadk_event_division); // Color
+            int sc  = (eadk_keyboard_key_down(kb, eadk_event_left_parenthesis) - eadk_keyboard_key_down(kb, eadk_event_right_parenthesis));
+            // Scale
 
             if (col) { // Color palette change
                 _menu_color(p_buffer_main, col);
@@ -290,7 +349,12 @@ int main(int argc, char * argv[]) {
             }
 
             if (ms != 0) { // Change time interval between frames
-                frame_ms = MAX(0, frame_ms + 5*ms);
+                FRAME_MS = MAX(0, FRAME_MS + 5*ms);
+                eadk_timing_msleep(menu_ms_delay);
+            }
+
+            if (sc != 0) {
+                SCALE_IDX = (SCALE_IDX + 5 + sc) % 5;
                 eadk_timing_msleep(menu_ms_delay);
             }
 
@@ -333,12 +397,17 @@ int main(int argc, char * argv[]) {
                 _menu_paste_pattern(p_buffer_main, cursor);
             }
 
+            // Save config
+            if (eadk_keyboard_key_down(kb, eadk_event_exe)) {
+                _menu_save_config();
+            }
+
             // Display cursor and selection corners
-            eadk_display_push_rect_uniform((eadk_rect_t){ cursor.x*F, cursor.y*F, F, F }, CURSOR_COLOR);
+            eadk_display_push_rect_uniform((eadk_rect_t){ cursor.x*SCALE, cursor.y*SCALE, SCALE, SCALE }, CURSOR_COLOR);
             if (select) {
-                eadk_display_push_rect_uniform((eadk_rect_t){ selection.x*F, selection.y*F, F, F }, CURSOR_COLOR);
-                eadk_display_push_rect_uniform((eadk_rect_t){ cursor.x*F, selection.y*F, F, F }, CURSOR_COLOR);
-                eadk_display_push_rect_uniform((eadk_rect_t){ selection.x*F, cursor.y*F, F, F }, CURSOR_COLOR);
+                eadk_display_push_rect_uniform((eadk_rect_t){ selection.x*SCALE, selection.y*SCALE, SCALE, SCALE }, CURSOR_COLOR);
+                eadk_display_push_rect_uniform((eadk_rect_t){ cursor.x*SCALE, selection.y*SCALE, SCALE, SCALE }, CURSOR_COLOR);
+                eadk_display_push_rect_uniform((eadk_rect_t){ selection.x*SCALE, cursor.y*SCALE, SCALE, SCALE }, CURSOR_COLOR);
             }
 
             // Framerate in menu, resulting in speed of cursor. Switch to delta time please
@@ -346,21 +415,21 @@ int main(int argc, char * argv[]) {
 
             // Clear cursor and selection corners
             eadk_display_push_rect_uniform(
-                (eadk_rect_t){ cursor.x*F, cursor.y*F, F, F },
+                (eadk_rect_t){ cursor.x*SCALE, cursor.y*SCALE, SCALE, SCALE },
                 (DIFF_COLOR) * p_buffer_main[ IDX( cursor.x, cursor.y ) ] + DEAD_COLOR
             );
 
             if (select) {
                 eadk_display_push_rect_uniform(
-                    (eadk_rect_t){ selection.x*F, selection.y*F, F, F },
+                    (eadk_rect_t){ selection.x*SCALE, selection.y*SCALE, SCALE, SCALE },
                     (DIFF_COLOR) * p_buffer_main[ IDX( selection.x, selection.y ) ] + DEAD_COLOR
                 );
                 eadk_display_push_rect_uniform(
-                    (eadk_rect_t){ cursor.x*F, selection.y*F, F, F },
+                    (eadk_rect_t){ cursor.x*SCALE, selection.y*SCALE, SCALE, SCALE },
                     (DIFF_COLOR) * p_buffer_main[ IDX( cursor.x, selection.y ) ] + DEAD_COLOR
                 );
                 eadk_display_push_rect_uniform(
-                    (eadk_rect_t){ selection.x*F, cursor.y*F, F, F },
+                    (eadk_rect_t){ selection.x*SCALE, cursor.y*SCALE, SCALE, SCALE },
                     (DIFF_COLOR) * p_buffer_main[ IDX( selection.x, cursor.y ) ] + DEAD_COLOR
                 );
             }
@@ -370,7 +439,7 @@ int main(int argc, char * argv[]) {
             cell_t* tmp = p_buffer_main;
             p_buffer_main = p_buffer_alt;
             p_buffer_alt = tmp;
-            eadk_timing_msleep(frame_ms);
+            eadk_timing_msleep(FRAME_MS);
         }
     }
 
