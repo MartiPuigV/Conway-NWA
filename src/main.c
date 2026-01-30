@@ -408,9 +408,20 @@ int main(int argc, char * argv[]) {
                 display_init_cells(buffer_main);
             }
 
+            // Pasting pattern from memory
+            if (eadk_keyboard_key_down(kb, eadk_event_ans) && extapp_fileExists(SAVE_FILE)) {
+                _menu_paste_pattern(buffer_main, cursor);
+            }
+
+            // Save config
+            if (eadk_keyboard_key_down(kb, eadk_event_exe)) {
+                _menu_save_config();
+                display_init_cells(buffer_main);
+            }
+
             // Update cursor position
-            cursor.x = (cursor.x + x + W) % W;
-            cursor.y = (cursor.y + y + H) % H;
+            if (x) cursor.x = (cursor.x + x + W) % W;
+            if (y) cursor.y = (cursor.y + y + H) % H;
 
             // Handle selections
             if (eadk_keyboard_key_down(kb, eadk_event_shift)) {
@@ -434,19 +445,9 @@ int main(int argc, char * argv[]) {
                 eadk_timing_msleep(menu_ms_delay); // Pause to avoid instant toggling
             } // end if (shift)
 
-            // Pasting pattern from memory
-            if (eadk_keyboard_key_down(kb, eadk_event_ans) && extapp_fileExists(SAVE_FILE)) {
-                _menu_paste_pattern(buffer_main, cursor);
-            }
-
-            // Save config
-            if (eadk_keyboard_key_down(kb, eadk_event_exe)) {
-                _menu_save_config();
-                display_init_cells(buffer_main);
-            }
-
             // Display cursor and selection corners
             eadk_display_push_rect_uniform((eadk_rect_t){ cursor.x*SCALE, cursor.y*SCALE, SCALE, SCALE }, CURSOR_COLOR);
+
             if (select) {
                 eadk_display_push_rect_uniform((eadk_rect_t){ selection.x*SCALE, selection.y*SCALE, SCALE, SCALE }, CURSOR_COLOR);
                 eadk_display_push_rect_uniform((eadk_rect_t){ cursor.x*SCALE, selection.y*SCALE, SCALE, SCALE }, CURSOR_COLOR);
