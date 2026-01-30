@@ -34,7 +34,11 @@ locally copied in a file called "pattern.cwp" on your calculator.
 
 ! They do not represent the speed, but rather the time between each frame !
 
-- / (division): Cycles between the 3 color palettes
+- / (division): Toggles strict/transparent pasting. Transparent pasting only pastes
+live cells, while strict will overwrite the entire selection rectangle with what the
+pattern contains, even writing dead cells to the grid.
+
+- alpha: Cycles between the 3 color palettes
 
 White
 Green
@@ -54,9 +58,6 @@ The configurations should automatically load when the app launches.
 
 - Minor speed improvements
 - Allow multiple pattern save slots (0-9)
-- Allow strict or normal pasting
-    Strict: Paste dead cells onto possibly live ones, and live cells
-    Normal: Only paste live cells, ignore the dead ares of the pattern
 
 # Aknowledgements
 

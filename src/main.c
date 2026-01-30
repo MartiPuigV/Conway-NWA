@@ -11,23 +11,24 @@ typedef struct {
     int scale_idx;
     int color_idx;
     int frame_ms;
+    int strict_paste;
 } Config;
 
 static const char* CONFIG_FILE = "conway.conf";
 
 Config load_config(const char* config_file) {
-    Config default_cfg = (Config){ 2, 0, 50 };
+    Config default_cfg = (Config){ 2, 0, 50, 1 };
 
     if (extapp_fileExists(config_file)) {
         size_t size = 0;
         const char* raw = extapp_fileRead(config_file, &size);
 
-        if (size < 3) {
+        if (size < 4) {
             // Should contain at least 3 bytes
             return default_cfg;
         }
 
-        return (Config){ raw[0], raw[1], raw[2] };
+        return (Config){ raw[0], raw[1], raw[2], raw[3] };
     }
 
     return default_cfg;
@@ -38,6 +39,7 @@ int SCALE_IDX;
 int SCALE;
 int COLOR_IDX;
 int FRAME_MS;
+int STRICT_PASTE;
 
 /* Macros */
 #define H (240 / SCALE)
@@ -153,6 +155,12 @@ static inline void cells_insert_pattern(cell_t* buffer_main, const char* pattern
     for (size_t i = 2; i < size; i++) {
         char rle = pattern[i];
 
+        if (STRICT_PASTE == 0 && color == 0) {
+            px += rle;
+            color = 1;
+            continue;
+        }
+
         while (rle > 0) {
             x = px % w;
             y = px / w;
@@ -250,8 +258,8 @@ static inline void display_message(const char* message, size_t len) {
     eadk_timing_msleep(menu_ms_delay);
 }
 
-static inline void _menu_color(cell_t* buffer_main, int col) {
-    COLOR_IDX = (COLOR_IDX + 3 + col) % 3;
+static inline void _menu_color(cell_t* buffer_main) {
+    COLOR_IDX = (COLOR_IDX + 1) % 3;
     CELL_COLOR = cell_colors[COLOR_IDX];
     DEAD_COLOR = dead_colors[COLOR_IDX];
     DIFF_COLOR = CELL_COLOR - DEAD_COLOR;
@@ -275,9 +283,9 @@ static inline void _menu_paste_pattern(cell_t* buffer, eadk_point_t cursor) {
 }
 
 static inline void _menu_save_config() {
-    const char config[3] = { (char)SCALE_IDX, (char)COLOR_IDX, (char)MIN(FRAME_MS, 250) };
+    const char config[4] = { (char)SCALE_IDX, (char)COLOR_IDX, (char)MIN(FRAME_MS, 250), (char)STRICT_PASTE };
     extapp_fileErase(CONFIG_FILE);
-    extapp_fileWrite(CONFIG_FILE, config, 3);
+    extapp_fileWrite(CONFIG_FILE, config, 4);
     display_message("Saved config", 12);
     eadk_timing_msleep(menu_ms_delay);
 }
@@ -303,6 +311,7 @@ int main(int argc, char * argv[]) {
     SCALE = scales[SCALE_IDX % 4];
     COLOR_IDX = CONFIG.color_idx;
     FRAME_MS = CONFIG.frame_ms;
+    STRICT_PASTE = CONFIG.strict_paste;
 
     CELL_COLOR = cell_colors[COLOR_IDX];
     DEAD_COLOR = dead_colors[COLOR_IDX];
@@ -322,6 +331,7 @@ int main(int argc, char * argv[]) {
     cell_t* buffer_main = calloc(H * W, sizeof(cell_t));
     cell_t* buffer_alt = calloc(H * W, sizeof(cell_t));
 
+    // Should not happen, was a safeguard when 1:1 cell:pixel was possible. Not enough RAM now
     if (buffer_main == NULL || buffer_alt == NULL) {
         eadk_display_draw_string("alloc failed...", (eadk_point_t){ 0, 0 }, true, eadk_color_red, eadk_color_black);
         eadk_timing_msleep(3000);
@@ -355,12 +365,12 @@ int main(int argc, char * argv[]) {
             int y   = (eadk_keyboard_key_down(kb, eadk_event_down)      - eadk_keyboard_key_down(kb, eadk_event_up));
             int mod = (eadk_keyboard_key_down(kb, eadk_event_toolbox)   - eadk_keyboard_key_down(kb, eadk_event_backspace));
             int ms  = (eadk_keyboard_key_down(kb, eadk_event_plus)      - eadk_keyboard_key_down(kb, eadk_event_minus));
-            int col = eadk_keyboard_key_down(kb, eadk_event_division); // Color
             int sc  = (eadk_keyboard_key_down(kb, eadk_event_left_parenthesis) - eadk_keyboard_key_down(kb, eadk_event_right_parenthesis));
             // Scale
 
-            if (col) { // Color palette change
-                _menu_color(buffer_main, col);
+            // Color palette change
+            if (eadk_keyboard_key_down(kb, eadk_event_alpha)) {
+                _menu_color(buffer_main);
             }
 
             // Modification flag
@@ -370,7 +380,9 @@ int main(int argc, char * argv[]) {
 
             if (ms != 0) { // Change time interval between frames
                 FRAME_MS = MAX(0, FRAME_MS + 10*ms);
+                display_message((ms > 0) ? "Increased frame duration" : "Decreased frame duration", 24);
                 eadk_timing_msleep(menu_ms_delay);
+                display_init_cells(buffer_main);
             }
 
             if (sc != 0) {
@@ -383,8 +395,17 @@ int main(int argc, char * argv[]) {
             // Copy entire screen
             if (eadk_keyboard_key_down(kb, eadk_event_multiplication)) {
                 display_message("Copied entire screen", 20);
+                eadk_timing_msleep(menu_ms_delay);
                 display_init_cells(buffer_main);
                 _menu_copy_pattern(buffer_main, (eadk_rect_t){ 0, 0, W, H });
+            }
+
+            // Change pasting mode Strict/Normal
+            if (eadk_keyboard_key_down(kb, eadk_event_division)) {
+                STRICT_PASTE = !STRICT_PASTE;
+                display_message(STRICT_PASTE ? "Pasting: Strict mode" : "Pasting: Transparent", 20);
+                eadk_timing_msleep(menu_ms_delay);
+                display_init_cells(buffer_main);
             }
 
             // Update cursor position
