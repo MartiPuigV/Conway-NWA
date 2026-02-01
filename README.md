@@ -1,69 +1,82 @@
 # Conway-NWA
 
-Conway's game of life as a Numworks App
+Conway's Game of Life as a Numworks App (NWA)
 
-NWA is not provided here yet. You can compile it yourself by following the instructions
-at nwagyu (yaya-cout.github.io/Nwagyu) on how to setup your environment, then running
+The NWA binary is not provided here yet. You can compile it yourself by following
+the instructions at Nwagyu (link below) on how to setup your environment, then running
 
-'make run'
+`make run`
+
+The `headers/eadk.h` file is not needed to compile, nwlink should handle that i believe.
+I still have it to peek at function prototypes and constants.
 
 The img-tool.py is a python script to turn a black and white image into
 a conway pattern file (intended to be used as external data for the NWA)
 
-! Modify the script accordingly to change image and output paths !
+**[!] Modify the script accordingly to change image and output paths [!]**
 
-The src/ folder contains an input.txt file, with a glider gun pattern.
-To let the NWA know to use external data, uncomment line(s) in src/main.c
+The `src` folder contains an `input.txt` file, with a glider gun pattern.
+To let the NWA know to use external data, uncomment line(s) in `src/main.c`
 (Should say "Optional: ...")
 
-# Controls
+## Controls
 
-- OK: switch between pause (menu/edit mode) and running the simulation.
+|**Key**     |**Action**                                                   |
+| ---------- | ----------------------------------------------------------- |
+|`OK`        | Switch between pause (edit mode) and running the simulation |
+|`Arrows`    | Move the cursor around (in edit mode)                       |
+|`Toolbox`   | Draw cell under cursor (in edit mode)                       |
+|`Backspace` | Erase cell under cursor (in edit mode)                      |
+|`Shift`     | Select area to copy (can later be pasted)                   |
+|`Ans`       | Paste copied pattern at your cursor position                |
+|`+` & `-`   | Increase/decrease frame duration                            |
+|`÷`         | Toggles strict/transparent pasting (details below)          |
+|`Alpha`     | Cycles between the 3 color palettes (see below)             |
+|`×`         | Copies the entire screen as a pattern                       |
+|`(` & `)`   | Cycle through 4 different resolutions (see below!)          |
+|`EXE`       | Save current configuration (palette, frame time, ...)       |
 
-When in edit mode, use the arrows to control a pink cursor. Toolbox (to the
-left of backspace) and backspace can be used to draw / erase cells, in that
-order.
+## Details
 
-- Shift: places your first point of a selection rectangle. When
-pressing shift a second time, the cells inside the shown rectangle will be
-locally copied in a file called "pattern.cwp" on your calculator.
+### Strict vs. Transparent pasting:
 
-- Ans: Paste copied pattern at your cursor position.
+- Strict pasting will paste anything the original pattern contains, including dead cells. This might overwrite
+live cells with dead ones.
 
-- [+] & [-]: Change simulation speed.
+- Transparent pasting, as its name suggest, acts as a transparent "image", and will
+only paste live cells. In transparent mode, selecting too large an area with too many dead cells is not a
+problem, as pasting will not overwrite a large rectangle with dead cells.
 
-! They do not represent the speed, but rather the time between each frame !
+### Color palettes:
 
-- / (division): Toggles strict/transparent pasting. Transparent pasting only pastes
-live cells, while strict will overwrite the entire selection rectangle with what the
-pattern contains, even writing dead cells to the grid.
-
-- alpha: Cycles between the 3 color palettes
-
-White
-Green
-Peach / Beige
+- White
+- Green
+- Peach / Beige
 
 Green and Peach colors come from [here](https://www.deviantart.com/advancedfan2020/art/Game-Boy-Palette-Set-Color-HEX-Part-12-920496174)
 
-- x (multiplication): Copies the entire screen as a pattern
+### Resolution:
 
-- "(" & ")": Cycle through 4 different scales. Changes only apply when loading settings
-at app start. 
+IMPORTANT:: For resolution changes to apply, you must change resolution, save configuration changes with `EXE`, then quit
+and open the app again. The grid is created when the app opens, and needs to be reopened each time you want to change the
+resolution. Future updates might circumvent this flaw.
 
-- EXE: Save current config (Color palette, grid scale, simulation speed)
-The configurations should automatically load when the app launches.
+Changes how many pixels wide a cell is. The available resolutions as of 1.1.0 are 2, 4, 5 and 8 pixel wide squares for a cell.
+A 1:1 pixel:cell ratio was doable in older versions, but newer versions fall short of RAM for that luxury. Don't worry about
+over- or undershooting those values, as it will simply wrap around.
 
-# Future updates and planned fixes
+## Future updates and planned fixes
 
-- Minor speed and memory improvements
+- Minor speed and major memory improvements
 - Allow multiple pattern save slots (0-9)
+- Allow step by step simulation (maybe step back too)
+- Add icon
 
-# Aknowledgements
+## Aknowledgements
 
-Thanks to Yaya-Cout for creating the amazing nwagyu website and the storage library,
-storage.c and storage.h.
+Thanks to [Yaya-Cout](https://github.com/Yaya-Cout) for creating the amazing nwagyu website and the
+storage library (here, src/storage.c and headers/storage.h).
 
-Thanks to anyone who contributed NWA's and inspired me to do this. I tried near all of them
-and each one amazes me more than the previous.
+Thanks to anyone who contributed NWA's and inspired me to do this. I tried near all of them and each one
+amazes me more than the previous. Go check them out at [Nwagyu](https://yaya-cout.github.io/Nwagyu/).
 
