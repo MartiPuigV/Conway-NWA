@@ -72,7 +72,7 @@ static const uint8_t rules[2][10] = {
     [1] = { 0, 0, 1, 1, 0, 0, 0, 0, 0, 0 }
 };
 
-static const int scales[4] = { 2, 4, 5, 8 };
+static const int scales[5] = { 1, 2, 4, 5, 8 };
 
 static const eadk_color_t cell_colors[3] = {
     0xFFFF, // White
@@ -116,17 +116,23 @@ static inline void step(cell_t* restrict buffer_main, cell_t* restrict buffer_al
     size_t i = 0;
     for (size_t y = 0; y < H; y++) {
         for (size_t x = 0; x < W; x++, i++) {
-            uint8_t n = get_neighbors(buffer_main, x, y);
-            buffer_alt[i] = rules[buffer_main[i]][n];
+            uint8_t neighbors = get_neighbors(buffer_main, x, y);
+            uint8_t new_cell = rules [ buffer_main[i] ] [ neighbors ];
 
-            if (buffer_alt[i] != buffer_main[i]) {
+            size_t idx = (y%2) * W + x;
+            if (y > 1) buffer_main[i - (2 * W)] = buffer_alt[idx];
+            buffer_alt[idx] = new_cell;
+
+            if (new_cell != buffer_main[i]) {
                 eadk_display_push_rect_uniform(
                     (eadk_rect_t){ x*SCALE, y*SCALE, SCALE, SCALE },
-                    (DIFF_COLOR) * buffer_alt[i] + DEAD_COLOR
+                    (DIFF_COLOR) * new_cell + DEAD_COLOR
                 );
             }
         }
     }
+
+    memcpy(buffer_main + i - (2 * W), buffer_alt, 2 * W * sizeof(cell_t));
 }
 
 static inline void display_init_cells(const cell_t* cells) {
@@ -149,25 +155,25 @@ static inline void cells_insert_pattern(cell_t* buffer_main, const char* pattern
 
     cell_t color = (pattern[0] & (1 << 7)) != 0;
     size_t w = ((pattern[0] & 1) << 8)+ pattern[1];
-    size_t px = 0;
+    size_t px_idx = 0;
     size_t x, y, segment;
 
     for (size_t i = 2; i < size; i++) {
         char rle = pattern[i];
 
         if (STRICT_PASTE == 0 && color == 0) {
-            px += rle;
+            px_idx += rle;
             color = 1;
             continue;
         }
 
         while (rle > 0) {
-            x = px % w;
-            y = px / w;
+            x = px_idx % w;
+            y = px_idx / w;
             segment = MIN(w - x, rle);
             memset(buffer_main + IDX(pos.x + x, pos.y + y), color, MIN(segment, W - x));
             rle -= segment;
-            px += segment;
+            px_idx += segment;
 
             if (y + 1 == H) {
                 return;
@@ -308,7 +314,7 @@ int main(int argc, char * argv[]) {
     // Load config
     CONFIG = load_config(CONFIG_FILE);
     SCALE_IDX = CONFIG.scale_idx;
-    SCALE = scales[SCALE_IDX % 4];
+    SCALE = scales[SCALE_IDX % 5];
     COLOR_IDX = CONFIG.color_idx;
     FRAME_MS = CONFIG.frame_ms;
     STRICT_PASTE = CONFIG.strict_paste;
@@ -328,13 +334,13 @@ int main(int argc, char * argv[]) {
     eadk_display_push_rect_uniform(eadk_screen_rect, 0x0);
 
     // Allocate buffers
-    cell_t* buffer_main = calloc(H * W, sizeof(cell_t));
-    cell_t* buffer_alt = calloc(H * W, sizeof(cell_t));
+    cell_t* buffer_main     = calloc(H * W, sizeof(cell_t));
+    cell_t* buffer_alt      = calloc(2 * W, sizeof(cell_t));
 
-    // Should not happen, was a safeguard when 1:1 cell:pixel was possible. Not enough RAM now
+    // Should not happen ... but if it does, starting simulation will reset!
     if (buffer_main == NULL || buffer_alt == NULL) {
-        eadk_display_draw_string("alloc failed...", (eadk_point_t){ 0, 0 }, true, eadk_color_red, eadk_color_black);
-        eadk_timing_msleep(3000);
+        eadk_display_draw_string("alloc failed... quit app", (eadk_point_t){ 0, 0 }, true, eadk_color_red, eadk_color_black);
+        eadk_timing_msleep(5000);
     }
 
     // Optional: load pattern from external_data
@@ -381,7 +387,7 @@ int main(int argc, char * argv[]) {
             if (ms != 0) { // Change time interval between frames
                 FRAME_MS = MAX(0, FRAME_MS + 10*ms);
                 display_message((ms > 0) ? "Increased frame duration" : "Decreased frame duration", 24);
-                eadk_timing_msleep(menu_ms_delay);
+                eadk_timing_msleep(menu_ms_delay/2);
                 display_init_cells(buffer_main);
             }
 
@@ -480,9 +486,6 @@ int main(int argc, char * argv[]) {
             // end if (pause)
         } else { // !pause, AKA run simulation
             step(buffer_main, buffer_alt);
-            cell_t* tmp = buffer_main;
-            buffer_main = buffer_alt;
-            buffer_alt = tmp;
             eadk_timing_msleep(FRAME_MS);
         }
     }
