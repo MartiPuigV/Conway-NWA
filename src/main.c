@@ -14,7 +14,7 @@ typedef struct {
     int strict_paste;
 } Config;
 
-static const char[11] CONFIG_FILE = "conway.conf";
+static const char* CONFIG_FILE = "conway.conf";
 
 Config load_config(const char* config_file) {
     Config default_cfg = (Config){ 2, 0, 50, 1 };
@@ -23,7 +23,7 @@ Config load_config(const char* config_file) {
         size_t size = 0;
         const char* raw = extapp_fileRead(config_file, &size);
 
-        if (size < 5) {
+        if (size < 4) {
             // Should contain at least 4 bytes
             return default_cfg;
         }
@@ -54,7 +54,7 @@ const uint32_t eadk_api_level  __attribute__((section(".rodata.eadk_api_level"))
 
 /* Constants and types */
 static const int menu_ms_delay = 250;
-static const char[11] SAVE_FILE = "pattern.cwp";
+static const char* SAVE_FILE = "pattern.cwp";
 static const eadk_color_t CURSOR_COLOR = 0xFCD5; // Pink, all channels
 // Choose a color that uses all channels, or low SCALE values will
 // make it hard to see where the cursor is aligned. Full red
@@ -115,6 +115,13 @@ static inline uint8_t get_neighbors(const cell_t* cells, size_t x, size_t y) {
 }
 
 static inline void step(cell_t* restrict buffer_main, cell_t* restrict buffer_alt) {
+    /*
+    * Alt buffer is two rows in size, and contains the updated grid
+    * When more than two rows have been computed, overwrite the main
+    * buffer safely, as it doesn't affect other cells, and overwrite
+    * the alt buffer one cell at a time.
+    */
+
     size_t i = 0;
 
     for (size_t y = 0; y < H; y++) {
@@ -297,8 +304,8 @@ static inline void _menu_paste_pattern(cell_t* buffer, eadk_point_t cursor) {
 }
 
 static inline void _menu_save_config() {
-    const char config[4] = { (char)SCALE_IDX, (char)COLOR_IDX, (char)MIN(FRAME_MS, 250), (char)STRICT_PASTE };
-    extapp_fileErase(CONFIG_FILE);
+    const char config[4] = { (char)SCALE_IDX, (char)COLOR_IDX, (char)FRAME_MS, (char)STRICT_PASTE };
+    if (extapp_fileExists(CONFIG_FILE)) extapp_fileErase(CONFIG_FILE);
     extapp_fileWrite(CONFIG_FILE, config, 4);
     display_message("Saved config", 12);
     eadk_timing_msleep(menu_ms_delay);
@@ -347,7 +354,7 @@ static inline void _menu_ms(int ms) {
     eadk_timing_msleep(menu_ms_delay / 2);
 }
 
-int main(int argc, char * argv[]) {
+int main(int argc, char* argv[]) {
     // Load config
     CONFIG = load_config(CONFIG_FILE);
     SCALE_IDX = CONFIG.scale_idx;
