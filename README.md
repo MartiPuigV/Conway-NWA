@@ -1,6 +1,6 @@
 # Conway-NWA
 
-Conway's Game of Life as a Numworks App (NWA)
+Conway's Game of Life as a Numworks App (NWA), version 1.2.0
 
 The NWA binary is not provided here yet. You can compile it yourself by following
 the instructions at Nwagyu (link below) on how to setup your environment, then running
@@ -21,20 +21,22 @@ To let the NWA know to use external data, uncomment line(s) in `src/main.c`
 
 ## Controls
 
-|**Key**     |**Action**                                                   |
-| ---------- | ----------------------------------------------------------- |
-|`OK`        | Switch between pause (edit mode) and running the simulation |
-|`Arrows`    | Move the cursor around (in edit mode)                       |
-|`Toolbox`   | Draw cell under cursor (in edit mode)                       |
-|`Backspace` | Erase cell under cursor (in edit mode)                      |
-|`Shift`     | Select area to copy (can later be pasted)                   |
-|`Ans`       | Paste copied pattern at your cursor position                |
-|`+` & `-`   | Increase/decrease frame duration                            |
-|`÷`         | Toggles strict/transparent pasting (details below)          |
-|`Alpha`     | Cycles between the 3 color palettes (see below)             |
-|`×`         | Copies the entire screen as a pattern                       |
-|`(` & `)`   | Cycle through 4 different resolutions (see below!)          |
-|`EXE`       | Save current configuration (palette, frame time, ...)       |
+| **Key**               | **Action**                                                   |
+| --------------------- | ------------------------------------------------------------ |
+| `OK`                  | Switch between pause and running the simulation              |
+| `Arrows`              | Move the cursor around                                       |
+| `Toolbox`             | Draw cell under cursor                                       |
+| `Backspace`           | Erase cell under cursor.                                     |
+| `Shift`               | Select area to copy (can later be pasted)                    |
+| `Ans`                 | Paste copied pattern at your cursor position                 |
+| `+` & `-`             | Increase/decrease frame duration                             |
+| `÷`                   | Toggles strict/transparent pasting (details below)           |
+| `Alpha`               | Cycles between the 3 color palettes (see below)              |
+| `×`                   | Copies the entire screen as a pattern                        |
+| `(` & `)`             | Cycle through 4 different resolutions (see below!)           |
+| `EXE`                 | Save current configuration (palette, frame time, ...)        |
+| `Back`                | Step one iteration of the simulation                         |
+| `Shift` + `Backspace` | Kill all cells                                               |
 
 ## Details
 
@@ -61,15 +63,12 @@ IMPORTANT:: For resolution changes to apply, you must change resolution, save co
 and open the app again. The grid is created when the app opens, and needs to be reopened each time you want to change the
 resolution. Future updates might circumvent this flaw.
 
-Changes how many pixels wide a cell is. The available resolutions as of 1.1.0 are 2, 4, 5 and 8 pixel wide squares for a cell.
-A 1:1 pixel:cell ratio was doable in older versions, but newer versions fall short of RAM for that luxury. Don't worry about
-over- or undershooting those values, as it will simply wrap around.
+Changes how many pixels wide a cell is. The available resolutions as of 1.2.0 are 1, 2, 4, 5 and 8 pixel wide squares for a cell.
 
 ## Future updates and planned fixes
 
-- Minor speed and major memory improvements
+- Minor speed improvements
 - Allow multiple pattern save slots (0-9)
-- Allow step by step simulation (maybe step back too)
 - Add icon
 
 ## Aknowledgements

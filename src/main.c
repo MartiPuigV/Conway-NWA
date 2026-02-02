@@ -14,7 +14,7 @@ typedef struct {
     int strict_paste;
 } Config;
 
-static const char* CONFIG_FILE = "conway.conf";
+static const char[11] CONFIG_FILE = "conway.conf";
 
 Config load_config(const char* config_file) {
     Config default_cfg = (Config){ 2, 0, 50, 1 };
@@ -23,8 +23,8 @@ Config load_config(const char* config_file) {
         size_t size = 0;
         const char* raw = extapp_fileRead(config_file, &size);
 
-        if (size < 4) {
-            // Should contain at least 3 bytes
+        if (size < 5) {
+            // Should contain at least 4 bytes
             return default_cfg;
         }
 
@@ -46,15 +46,15 @@ int STRICT_PASTE;
 #define W (320 / SCALE)
 
 #define IDX(x, y) ((y) * W + (x))
-#define MIN(a, b) (((a) < (b)) ? (a)  : (b))
-#define MAX(a, b) (((a) > (b)) ? (a)  : (b))
+#define MIN(a, b) (((a) < (b)) ? (a) : (b))
+#define MAX(a, b) (((a) > (b)) ? (a) : (b))
 
 const char eadk_app_name[] __attribute__((section(".rodata.eadk_app_name"))) = "Conway";
 const uint32_t eadk_api_level  __attribute__((section(".rodata.eadk_api_level"))) = 0;
 
 /* Constants and types */
 static const int menu_ms_delay = 250;
-static const char* SAVE_FILE = "pattern.cwp";
+static const char[11] SAVE_FILE = "pattern.cwp";
 static const eadk_color_t CURSOR_COLOR = 0xFCD5; // Pink, all channels
 // Choose a color that uses all channels, or low SCALE values will
 // make it hard to see where the cursor is aligned. Full red
@@ -90,53 +90,60 @@ static const eadk_color_t dead_colors[3] = {
 static inline uint8_t get_neighbors(const cell_t* cells, size_t x, size_t y) {
     // Get neighbor count of cell at (x; y)
     size_t n = 0;
+
     const size_t row = y * W;
-    const size_t row_up = (y > 0) ? row - W : 0;        // Maybe not accurate at borders idk
-    const size_t row_dn = (y + 1 < H) ? row + W : row;  // Same issue
+    const size_t row_up = (y > 0) ? row - W : 0;        // Should accurate at borders idk
+    const size_t row_dn = (y + 1 < H) ? row + W : row;  // Same as above
 
-    if (y > 0) {
-        if (x > 0)          n += cells[row_up + x - 1];
-        n += cells[row_up + x];
-        if (x+1 < W)        n += cells[row_up + x + 1];
-    }
+    const bool y_0   = y > 0;
+    const bool x_0   = x > 0;
+    const bool xp1_W = x + 1 < W;
+    const bool yp1_H = y + 1 < H;
 
-    if (x > 0)              n += cells[row + x - 1];
-    if (x+1 < W)            n += cells[row + x + 1];
+    n += cells[row_up + x - 1] * y_0 * x_0;
+    n += cells[row_up + x    ] * y_0;
+    n += cells[row_up + x + 1] * y_0 * xp1_W;
 
-    if (y+1 < H) {
-        if (x > 0)          n += cells[row_dn + x - 1];
-        n += cells[row_dn + x];
-        if (x+1 < W)        n += cells[row_dn + x + 1];
-    }
+    n += cells[row + x - 1] * x_0;
+    n += cells[row + x + 1] * xp1_W;
+
+    n += cells[row_dn + x - 1] * yp1_H * x_0;
+    n += cells[row_dn + x    ] * yp1_H;
+    n += cells[row_dn + x + 1] * yp1_H * xp1_W;
 
     return n;
 }
 
 static inline void step(cell_t* restrict buffer_main, cell_t* restrict buffer_alt) {
     size_t i = 0;
+
     for (size_t y = 0; y < H; y++) {
         for (size_t x = 0; x < W; x++, i++) {
             uint8_t neighbors = get_neighbors(buffer_main, x, y);
             uint8_t new_cell = rules [ buffer_main[i] ] [ neighbors ];
 
+            // Alt buffer magic
             size_t idx = (y%2) * W + x;
             if (y > 1) buffer_main[i - (2 * W)] = buffer_alt[idx];
             buffer_alt[idx] = new_cell;
 
-            if (new_cell != buffer_main[i]) {
-                eadk_display_push_rect_uniform(
-                    (eadk_rect_t){ x*SCALE, y*SCALE, SCALE, SCALE },
-                    (DIFF_COLOR) * new_cell + DEAD_COLOR
-                );
-            }
+            if (new_cell == buffer_main[i]) continue;
+
+            // Only display stuff that actually changes
+            eadk_display_push_rect_uniform(
+                (eadk_rect_t){ x*SCALE, y*SCALE, SCALE, SCALE },
+                (DIFF_COLOR) * new_cell + DEAD_COLOR
+            );
         }
     }
 
+    // Copy leftover of buffer_alt to buffer_main's last two rows
     memcpy(buffer_main + i - (2 * W), buffer_alt, 2 * W * sizeof(cell_t));
 }
 
-static inline void display_init_cells(const cell_t* cells) {
+static inline void display_draw_cells(const cell_t* cells) {
     size_t i = 0;
+
     for (size_t y = 0; y < H; y++) {
         for (size_t x = 0; x < W; x++, i++) {
             eadk_display_push_rect_uniform(
@@ -153,15 +160,15 @@ static inline void cells_insert_pattern(cell_t* buffer_main, const char* pattern
         return;
     }
 
-    cell_t color = (pattern[0] & (1 << 7)) != 0;
-    size_t w = ((pattern[0] & 1) << 8)+ pattern[1];
+    cell_t color = (pattern[0] >> 7) & 1;
+    size_t w = ((pattern[0] & 1) << 8) + pattern[1];
     size_t px_idx = 0;
     size_t x, y, segment;
 
     for (size_t i = 2; i < size; i++) {
         char rle = pattern[i];
 
-        if (STRICT_PASTE == 0 && color == 0) {
+        if (!STRICT_PASTE && color == 0) {
             px_idx += rle;
             color = 1;
             continue;
@@ -200,6 +207,7 @@ static char* rle_encode(const cell_t* cells, size_t size, size_t* out_size) {
             if (streak == 256) {
                 rle[idx++] = 255;
                 rle[idx++] = 0;
+                // Add max value for current color and skip next with 0
                 streak = 1;
             }
         } else {
@@ -269,7 +277,7 @@ static inline void _menu_color(cell_t* buffer_main) {
     CELL_COLOR = cell_colors[COLOR_IDX];
     DEAD_COLOR = dead_colors[COLOR_IDX];
     DIFF_COLOR = CELL_COLOR - DEAD_COLOR;
-    display_init_cells(buffer_main);
+    display_draw_cells(buffer_main);
     eadk_timing_msleep(menu_ms_delay);
 }
 
@@ -284,7 +292,7 @@ static inline void _menu_paste_pattern(cell_t* buffer, eadk_point_t cursor) {
     const char* pattern = extapp_fileRead(SAVE_FILE, &pattern_size);
 
     cells_insert_pattern(buffer, pattern, pattern_size, cursor); // Insert pattern into array
-    display_init_cells(buffer); // Update display with newly pasted cells
+    display_draw_cells(buffer); // Update display with newly pasted cells
     eadk_timing_msleep(menu_ms_delay);
 }
 
@@ -310,6 +318,35 @@ static inline void _menu_copy_pattern(cell_t* buffer, eadk_rect_t area) {
     }
 }
 
+static inline void _menu_scale(int sc) {
+    SCALE_IDX = (SCALE_IDX + 5 + sc) % 5;
+
+    char msg[] = "[,] Scale:  ";
+    msg[1] -= sc;
+    // Some magic ASCII. Offset ',' by -sc.
+    // + : 43
+    // , : 44
+    // - : 45
+    msg[11] = '0' + scales[SCALE_IDX];
+    // A classic
+
+    display_message(msg, 12);
+    eadk_timing_msleep(menu_ms_delay);
+}
+
+static inline void _menu_ms(int ms) {
+    FRAME_MS = MIN(MAX(0, FRAME_MS + 10*ms), 250); // Clamp in [0, 250] range (min. of 4 FPS)
+
+    char msg[] = "[,]     ms / frame";
+    msg[1] -= ms; // Same magic as above
+    msg[4] = (FRAME_MS / 100)      + '0';
+    msg[5] = (FRAME_MS / 10 ) % 10 + '0';
+    msg[6] = (FRAME_MS % 10 )      + '0';
+
+    display_message(msg, 18);
+    eadk_timing_msleep(menu_ms_delay / 2);
+}
+
 int main(int argc, char * argv[]) {
     // Load config
     CONFIG = load_config(CONFIG_FILE);
@@ -330,8 +367,8 @@ int main(int argc, char * argv[]) {
     eadk_rect_t selection = {0};
     uint8_t cursor_speed = 4;
 
-    // First screen reset (black)
-    eadk_display_push_rect_uniform(eadk_screen_rect, 0x0);
+    // First screen reset
+    eadk_display_push_rect_uniform(eadk_screen_rect, DEAD_COLOR);
 
     // Allocate buffers
     cell_t* buffer_main     = calloc(H * W, sizeof(cell_t));
@@ -345,11 +382,12 @@ int main(int argc, char * argv[]) {
 
     // Optional: load pattern from external_data
     // cells_insert_pattern(buffer_main, eadk_external_data, eadk_external_data_size, 0, 0);
-    display_init_cells(buffer_main);
+    display_draw_cells(buffer_main);
 
     // Menu flags
     bool pause = true;
     bool select = false;
+    bool step_lock = 0;
 
     // Avoid app opening to cause keydown(OK)
     eadk_timing_msleep(menu_ms_delay);
@@ -380,29 +418,32 @@ int main(int argc, char * argv[]) {
             }
 
             // Modification flag
-            if (mod != 0 && !select) { // Don't modify when selecting cells
-                _menu_mod(buffer_main, cursor, mod);
+            if (mod != 0) { // Don't modify when selecting cells
+                if (mod == -1 && select) { // Shift + backspace (clear)
+                    memset(buffer_main, 0, W * H * sizeof(cell_t));
+                    select = false;
+                    // No need to call display_draw_cells
+                    eadk_display_push_rect_uniform(eadk_screen_rect, DEAD_COLOR);
+                } else {
+                    _menu_mod(buffer_main, cursor, mod);
+                }
             }
 
             if (ms != 0) { // Change time interval between frames
-                FRAME_MS = MAX(0, FRAME_MS + 10*ms);
-                display_message((ms > 0) ? "Increased frame duration" : "Decreased frame duration", 24);
-                eadk_timing_msleep(menu_ms_delay/2);
-                display_init_cells(buffer_main);
+                _menu_ms(ms);
+                display_draw_cells(buffer_main);
             }
 
             if (sc != 0) {
-                SCALE_IDX = (SCALE_IDX + 5 + sc) % 5;
-                display_message((sc == 1) ? "Increased scale" : "Decreased scale", 15);
-                eadk_timing_msleep(menu_ms_delay);
-                display_init_cells(buffer_main);
+                _menu_scale(sc);
+                display_draw_cells(buffer_main);
             }
 
             // Copy entire screen
             if (eadk_keyboard_key_down(kb, eadk_event_multiplication)) {
                 display_message("Copied entire screen", 20);
                 eadk_timing_msleep(menu_ms_delay);
-                display_init_cells(buffer_main);
+                display_draw_cells(buffer_main);
                 _menu_copy_pattern(buffer_main, (eadk_rect_t){ 0, 0, W, H });
             }
 
@@ -411,7 +452,7 @@ int main(int argc, char * argv[]) {
                 STRICT_PASTE = !STRICT_PASTE;
                 display_message(STRICT_PASTE ? "Pasting: Strict mode" : "Pasting: Transparent", 20);
                 eadk_timing_msleep(menu_ms_delay);
-                display_init_cells(buffer_main);
+                display_draw_cells(buffer_main);
             }
 
             // Pasting pattern from memory
@@ -422,8 +463,16 @@ int main(int argc, char * argv[]) {
             // Save config
             if (eadk_keyboard_key_down(kb, eadk_event_exe)) {
                 _menu_save_config();
-                display_init_cells(buffer_main);
+                display_draw_cells(buffer_main);
             }
+
+            // Handle stepping
+            if (eadk_keyboard_key_down(kb, eadk_event_back) && !step_lock) {
+                step(buffer_main, buffer_alt);
+                // No wait since key has to be released
+            }
+
+            step_lock = eadk_keyboard_key_down(kb, eadk_event_back);
 
             // Update cursor position
             if (x) cursor.x = (cursor.x + x + W) % W;
