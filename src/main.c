@@ -54,7 +54,10 @@ const uint32_t eadk_api_level  __attribute__((section(".rodata.eadk_api_level"))
 
 /* Constants and types */
 static const int menu_ms_delay = 250;
-static const char* SAVE_FILE = "pattern.cwp";
+static const int AREA_MAX = 160 * 120;
+// The calculator's memory, with no other files, can support around 6 patterns of
+// size AREA_MAX, with worst RLE configuration (alternating pixels)
+
 static const eadk_color_t CURSOR_COLOR = 0xFCD5; // Pink, all channels
 // Choose a color that uses all channels, or low SCALE values will
 // make it hard to see where the cursor is aligned. Full red
@@ -63,6 +66,7 @@ static const eadk_color_t CURSOR_COLOR = 0xFCD5; // Pink, all channels
 static eadk_color_t CELL_COLOR = 0xFFFF;
 static eadk_color_t DEAD_COLOR = 0x0000;
 static eadk_color_t DIFF_COLOR = 0xFFFF;
+static char SAVE_FILE[] = "pattern0.cwp";
 
 typedef uint8_t cell_t;
 
@@ -85,6 +89,44 @@ static const eadk_color_t dead_colors[3] = {
     0x4AA4, // Dark green
     0x6246, // Dark brown
 };
+
+static const eadk_event_t numpad[10] = {
+    48, 42, 43, 44, 36, 37, 38, 30, 31, 32 // Numpad events, 0-9
+};
+
+static inline void display_message(const char* message, size_t len) {
+    eadk_display_push_rect_uniform(eadk_screen_rect, DEAD_COLOR);
+    eadk_display_draw_string(
+        message,
+        (eadk_point_t){ EADK_SCREEN_WIDTH/2 - 5*len, EADK_SCREEN_HEIGHT/2 - 10 },
+        true, CELL_COLOR, DEAD_COLOR
+    );
+    eadk_timing_msleep(menu_ms_delay);
+}
+
+static const int eadk_event_to_numpad(eadk_event_t event) {
+    // Translates the event ID to [0-9] if event is a numpad key else -1
+    for (size_t i = 0; i < 10; i++) {
+        if (numpad[i] == event) return i;
+    }
+
+    return -1;
+}
+
+static inline int _menu_await_numpad() {
+    int32_t timeout;
+    eadk_event_t key;
+    int numpad;
+
+    eadk_display_push_rect_uniform(eadk_screen_rect, DEAD_COLOR);
+    display_message("Select number [0-9]", 19);
+
+    while (true) {
+        key = eadk_event_get(&timeout);
+        numpad = eadk_event_to_numpad(key);
+        if (numpad != -1) return numpad;
+    }
+}
 
 /* Functions */
 static inline uint8_t get_neighbors(const cell_t* cells, size_t x, size_t y) {
@@ -269,16 +311,6 @@ static char* yank_pattern(const cell_t* buffer_main, size_t* out_size, eadk_rect
     return res;
 }
 
-static inline void display_message(const char* message, size_t len) {
-    eadk_display_push_rect_uniform(eadk_screen_rect, DEAD_COLOR);
-    eadk_display_draw_string(
-        message,
-        (eadk_point_t){ EADK_SCREEN_WIDTH/2 - 5*len, EADK_SCREEN_HEIGHT/2 - 10 },
-        true, CELL_COLOR, DEAD_COLOR
-    );
-    eadk_timing_msleep(menu_ms_delay);
-}
-
 static inline void _menu_color(cell_t* buffer_main) {
     COLOR_IDX = (COLOR_IDX + 1) % 3;
     CELL_COLOR = cell_colors[COLOR_IDX];
@@ -294,8 +326,17 @@ static inline void _menu_mod(cell_t* buffer, eadk_point_t cursor, int mod) {
     eadk_display_push_rect_uniform((eadk_rect_t){ cursor.x*SCALE, cursor.y*SCALE, SCALE, SCALE }, (CELL_COLOR - DEAD_COLOR) * c + DEAD_COLOR);
 }
 
-static inline void _menu_paste_pattern(cell_t* buffer, eadk_point_t cursor) {
+static inline void _menu_paste_pattern(cell_t* buffer, eadk_point_t cursor, int savefile_idx) {
     size_t pattern_size = 0;
+    SAVE_FILE[7] = '0'+savefile_idx;
+
+    if (!extapp_fileExists(SAVE_FILE)) {
+        display_message("That savefile doesn't exist!", 28);
+        eadk_timing_msleep(menu_ms_delay);
+        display_draw_cells(buffer);
+        return;
+    }
+
     const char* pattern = extapp_fileRead(SAVE_FILE, &pattern_size);
 
     cells_insert_pattern(buffer, pattern, pattern_size, cursor); // Insert pattern into array
@@ -311,18 +352,29 @@ static inline void _menu_save_config() {
     eadk_timing_msleep(menu_ms_delay);
 }
 
-static inline void _menu_copy_pattern(cell_t* buffer, eadk_rect_t area) {
+static inline bool _menu_copy_pattern(cell_t* buffer, eadk_rect_t area, int savefile_idx) {
+    if (area.width * area.height > AREA_MAX) {
+        display_message("Area too large", 14);
+        return false;
+    }
+
     size_t yank_size = 0;
     char* selected_cells = yank_pattern(buffer, &yank_size, area);
+    SAVE_FILE[7] = '0'+savefile_idx;
+    // It's OK to overwrite because every
 
     // Avoid overwriting savefile if no pattern was yanked
     if (selected_cells && yank_size > 0) {
-        extapp_fileErase(SAVE_FILE);
+        if (extapp_fileExists(SAVE_FILE)) extapp_fileErase(SAVE_FILE);
         // Erase previous file to avoid getting multiple files with same name
         extapp_fileWrite(SAVE_FILE, selected_cells, yank_size);
 
         free(selected_cells);
     }
+
+    // If not enough space, it won't create the file.
+    // This only fails if saving to an already existing file and the memory is full.
+    return extapp_fileExists(SAVE_FILE);
 }
 
 static inline void _menu_scale(int sc) {
@@ -448,10 +500,15 @@ int main(int argc, char* argv[]) {
 
             // Copy entire screen
             if (eadk_keyboard_key_down(kb, eadk_event_multiplication)) {
-                display_message("Copied entire screen", 20);
+                int numpad = _menu_await_numpad();
+                bool status = _menu_copy_pattern(buffer_main, (eadk_rect_t){ 0, 0, W, H }, numpad);
+
+                if (status) {
+                    display_message("Copied entire screen", 20);
+                }
+
                 eadk_timing_msleep(menu_ms_delay);
                 display_draw_cells(buffer_main);
-                _menu_copy_pattern(buffer_main, (eadk_rect_t){ 0, 0, W, H });
             }
 
             // Change pasting mode Strict/Normal
@@ -463,8 +520,9 @@ int main(int argc, char* argv[]) {
             }
 
             // Pasting pattern from memory
-            if (eadk_keyboard_key_down(kb, eadk_event_ans) && extapp_fileExists(SAVE_FILE)) {
-                _menu_paste_pattern(buffer_main, cursor);
+            if (eadk_keyboard_key_down(kb, eadk_event_ans)) {
+                int numpad = _menu_await_numpad();
+                _menu_paste_pattern(buffer_main, cursor, numpad);
             }
 
             // Save config
@@ -497,7 +555,9 @@ int main(int argc, char* argv[]) {
                     selection.x = min_x;
                     selection.y = min_y;
 
-                    _menu_copy_pattern(buffer_main, selection);
+                    int numpad = _menu_await_numpad();
+                    _menu_copy_pattern(buffer_main, selection, numpad);
+                    display_draw_cells(buffer_main);
                 } else { // Selecting first point
                     selection.x = cursor.x;
                     selection.y = cursor.y;
