@@ -35,6 +35,6 @@ def rle_encode(pixels:list[int], width: int):
     with open("src/input.txt", "w") as file: # Adapt output path, use this is compiling for pattern as external data
         file.write(''.join(chr(r) for r in res))
 
-pixels, H, W = load_img('glider_gun.png') # Use your own image path
+pixels, H, W = load_img('resources/glider_gun.png') # Use your own image path
 rle_encode(pixels, W)
 

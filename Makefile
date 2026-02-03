@@ -12,6 +12,7 @@ endef
 src = $(addprefix src/,\
   main.c \
   storage.c \
+  font.c \
 )
 
 CFLAGS = -std=c99

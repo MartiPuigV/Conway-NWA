@@ -1,6 +1,6 @@
 # Conway-NWA
 
-Conway's Game of Life as a Numworks App (NWA), version 1.2.0
+Conway's Game of Life as a Numworks App (NWA), version 1.2.1
 
 The NWA binary is not provided here yet. You can compile it yourself by following
 the instructions at Nwagyu (link below) on how to setup your environment, then running
@@ -37,6 +37,7 @@ To let the NWA know to use external data, uncomment line(s) in `src/main.c`
 | `EXE`                 | Save current configuration (palette, frame time, ...)        |
 | `Back`                | Step one iteration of the simulation                         |
 | `Shift` + `Backspace` | Kill all cells                                               |
+| `Ln`                  | Toggle custom pixel font                                     |
 
 ## Details
 
@@ -65,11 +66,23 @@ resolution. Future updates might circumvent this flaw.
 
 Changes how many pixels wide a cell is. The available resolutions as of 1.2.0 are 1, 2, 4, 5 and 8 pixel wide squares for a cell.
 
+### Custom pixel font
+
+The pixel font is a 4x4 font containing the basic characters needed. It's a mix of two fonts, both can be found below in Aknowledgements.
+The spritesheet can be found in `resources/font.png`, and is of course free to use.
+
 ## Future updates and planned fixes
 
-- Minor speed improvements
-- Allow multiple pattern save slots (0-9)
+Ranked by priority
+
+- Add panel to view all settings and savefiles
+- Code cleanup & split `src/main.c` into multiple `.c` and `.h` files
 - Add icon
+- Add custom font
+- Add ctrl+z
+- Minor speed improvements
+- Add tiny animations
+- Add cell fade / prediction
 
 ## Aknowledgements
 
@@ -78,4 +91,10 @@ storage library (here, src/storage.c and headers/storage.h).
 
 Thanks to anyone who contributed NWA's and inspired me to do this. I tried near all of them and each one
 amazes me more than the previous. Go check them out at [Nwagyu](https://yaya-cout.github.io/Nwagyu/).
+
+Thanks to an anonymous font submitter, for some characters of the font.
+Font is [here](https://fontsgeek.com/pixel-4x4-font)
+
+Thanks to `cheeseslope` on fontstruct for most characters of the font.
+Font is [here](https://fontstruct.com/fontstructions/show/1736685/bjg-pixel-brandon-james-greer)
 

@@ -1,4 +1,5 @@
 #include "storage.h"
+#include "font.h"
 #include <eadk.h>
 #include <stdlib.h>
 #include <string.h>
@@ -12,34 +13,37 @@ typedef struct {
     int color_idx;
     int frame_ms;
     int strict_paste;
+    int font;
 } Config;
 
 static const char* CONFIG_FILE = "conway.conf";
 
 Config load_config(const char* config_file) {
-    Config default_cfg = (Config){ 2, 0, 50, 1 };
+    Config default_cfg = (Config){ 2, 0, 50, 1, 0 };
 
     if (extapp_fileExists(config_file)) {
         size_t size = 0;
         const char* raw = extapp_fileRead(config_file, &size);
 
-        if (size < 4) {
-            // Should contain at least 4 bytes
+        if (size < 5) {
+            // Should contain at least 5 bytes
             return default_cfg;
         }
 
-        return (Config){ raw[0], raw[1], raw[2], raw[3] };
+        return (Config){ raw[0], raw[1], raw[2], raw[3], raw[4] };
     }
 
     return default_cfg;
 }
 
+/* Config declarations */
 Config CONFIG;
 int SCALE_IDX;
 int SCALE;
 int COLOR_IDX;
 int FRAME_MS;
 int STRICT_PASTE;
+int FONT; // 0, 1 : Base, custom [font]
 
 /* Macros */
 #define H (240 / SCALE)
@@ -58,7 +62,7 @@ static const int AREA_MAX = 160 * 120;
 // The calculator's memory, with no other files, can support around 6 patterns of
 // size AREA_MAX, with worst RLE configuration (alternating pixels)
 
-static const eadk_color_t CURSOR_COLOR = 0xFCD5; // Pink, all channels
+static const eadk_color_t CURSOR_COLOR = 0xFCD5; // Pink
 // Choose a color that uses all channels, or low SCALE values will
 // make it hard to see where the cursor is aligned. Full red
 // cursor appears to end higher than it should since red is
@@ -67,6 +71,7 @@ static eadk_color_t CELL_COLOR = 0xFFFF;
 static eadk_color_t DEAD_COLOR = 0x0000;
 static eadk_color_t DIFF_COLOR = 0xFFFF;
 static char SAVE_FILE[] = "pattern0.cwp";
+// Not const, as the 0 char gets reassigned.
 
 typedef uint8_t cell_t;
 
@@ -96,11 +101,16 @@ static const eadk_event_t numpad[10] = {
 
 static inline void display_message(const char* message, size_t len) {
     eadk_display_push_rect_uniform(eadk_screen_rect, DEAD_COLOR);
-    eadk_display_draw_string(
-        message,
-        (eadk_point_t){ EADK_SCREEN_WIDTH/2 - 5*len, EADK_SCREEN_HEIGHT/2 - 10 },
-        true, CELL_COLOR, DEAD_COLOR
-    );
+    const int scale = 2;
+
+    if (FONT) {
+        eadk_point_t pos = { EADK_SCREEN_WIDTH/2 - (2*scale + 1)*len, EADK_SCREEN_HEIGHT/2 - 2*scale };
+        display_string(message, len, pos, scale, CELL_COLOR, DEAD_COLOR);
+    } else {
+        eadk_point_t pos = { EADK_SCREEN_WIDTH/2 - 5*len, EADK_SCREEN_HEIGHT/2 - 10 };
+        eadk_display_draw_string(message, pos, true, CELL_COLOR, DEAD_COLOR);
+    }
+
     eadk_timing_msleep(menu_ms_delay);
 }
 
@@ -119,7 +129,7 @@ static inline int _menu_await_numpad() {
     int numpad;
 
     eadk_display_push_rect_uniform(eadk_screen_rect, DEAD_COLOR);
-    display_message("Select number [0-9]", 19);
+    display_message("select number [0-9]", 19);
 
     while (true) {
         key = eadk_event_get(&timeout);
@@ -331,8 +341,7 @@ static inline void _menu_paste_pattern(cell_t* buffer, eadk_point_t cursor, int 
     SAVE_FILE[7] = '0'+savefile_idx;
 
     if (!extapp_fileExists(SAVE_FILE)) {
-        display_message("That savefile doesn't exist!", 28);
-        eadk_timing_msleep(menu_ms_delay);
+        display_message("that savefile doesn't exist!", 28);
         display_draw_cells(buffer);
         return;
     }
@@ -345,16 +354,15 @@ static inline void _menu_paste_pattern(cell_t* buffer, eadk_point_t cursor, int 
 }
 
 static inline void _menu_save_config() {
-    const char config[4] = { (char)SCALE_IDX, (char)COLOR_IDX, (char)FRAME_MS, (char)STRICT_PASTE };
+    const char config[5] = { (char)SCALE_IDX, (char)COLOR_IDX, (char)FRAME_MS, (char)STRICT_PASTE, (char)FONT };
     if (extapp_fileExists(CONFIG_FILE)) extapp_fileErase(CONFIG_FILE);
-    extapp_fileWrite(CONFIG_FILE, config, 4);
-    display_message("Saved config", 12);
-    eadk_timing_msleep(menu_ms_delay);
+    extapp_fileWrite(CONFIG_FILE, config, 5);
+    display_message("saved config", 12);
 }
 
 static inline bool _menu_copy_pattern(cell_t* buffer, eadk_rect_t area, int savefile_idx) {
     if (area.width * area.height > AREA_MAX) {
-        display_message("Area too large", 14);
+        display_message("area too large!", 15);
         return false;
     }
 
@@ -380,7 +388,7 @@ static inline bool _menu_copy_pattern(cell_t* buffer, eadk_rect_t area, int save
 static inline void _menu_scale(int sc) {
     SCALE_IDX = (SCALE_IDX + 5 + sc) % 5;
 
-    char msg[] = "[,] Scale:  ";
+    char msg[] = "[,] scale:  ";
     msg[1] -= sc;
     // Some magic ASCII. Offset ',' by -sc.
     // + : 43
@@ -396,14 +404,13 @@ static inline void _menu_scale(int sc) {
 static inline void _menu_ms(int ms) {
     FRAME_MS = MIN(MAX(0, FRAME_MS + 10*ms), 250); // Clamp in [0, 250] range (min. of 4 FPS)
 
-    char msg[] = "[,]     ms / frame";
+    char msg[] = "[,] 000 ms.frame";
     msg[1] -= ms; // Same magic as above
     msg[4] = (FRAME_MS / 100)      + '0';
     msg[5] = (FRAME_MS / 10 ) % 10 + '0';
     msg[6] = (FRAME_MS % 10 )      + '0';
 
-    display_message(msg, 18);
-    eadk_timing_msleep(menu_ms_delay / 2);
+    display_message(msg, 16);
 }
 
 int main(int argc, char* argv[]) {
@@ -414,10 +421,12 @@ int main(int argc, char* argv[]) {
     COLOR_IDX = CONFIG.color_idx;
     FRAME_MS = CONFIG.frame_ms;
     STRICT_PASTE = CONFIG.strict_paste;
+    FONT = CONFIG.font;
 
     CELL_COLOR = cell_colors[COLOR_IDX];
     DEAD_COLOR = dead_colors[COLOR_IDX];
     DIFF_COLOR = CELL_COLOR - DEAD_COLOR;
+
 
     // Main "global" variables
     eadk_point_t cursor = { W/2, H/2 };
@@ -446,7 +455,8 @@ int main(int argc, char* argv[]) {
     // Menu flags
     bool pause = true;
     bool select = false;
-    bool step_lock = 0;
+    bool step_lock = false;
+    bool panel_lock = false;
 
     // Avoid app opening to cause keydown(OK)
     eadk_timing_msleep(menu_ms_delay);
@@ -504,18 +514,16 @@ int main(int argc, char* argv[]) {
                 bool status = _menu_copy_pattern(buffer_main, (eadk_rect_t){ 0, 0, W, H }, numpad);
 
                 if (status) {
-                    display_message("Copied entire screen", 20);
+                    display_message("copied entire screen", 20);
                 }
 
-                eadk_timing_msleep(menu_ms_delay);
                 display_draw_cells(buffer_main);
             }
 
             // Change pasting mode Strict/Normal
             if (eadk_keyboard_key_down(kb, eadk_event_division)) {
                 STRICT_PASTE = !STRICT_PASTE;
-                display_message(STRICT_PASTE ? "Pasting: Strict mode" : "Pasting: Transparent", 20);
-                eadk_timing_msleep(menu_ms_delay);
+                display_message(STRICT_PASTE ? "pasting: strict mode" : "pasting: transparent", 20);
                 display_draw_cells(buffer_main);
             }
 
@@ -538,6 +546,21 @@ int main(int argc, char* argv[]) {
             }
 
             step_lock = eadk_keyboard_key_down(kb, eadk_event_back);
+
+            // Handle panel display
+            if (eadk_keyboard_key_down(kb, eadk_event_var) && !panel_lock) {
+                // @fixme
+                ;
+            }
+
+            panel_lock = eadk_keyboard_key_down(kb, eadk_event_var);
+
+            // Handle font toggle
+            if (eadk_keyboard_key_down(kb, eadk_event_ln)) {
+                FONT = !FONT;
+                display_message(FONT ? "font: pixel" : "font: basic", 11);
+                display_draw_cells(buffer_main);
+            }
 
             // Update cursor position
             if (x) cursor.x = (cursor.x + x + W) % W;
