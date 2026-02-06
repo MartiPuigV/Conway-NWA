@@ -13,10 +13,14 @@ src = $(addprefix src/,\
   main.c \
   storage.c \
   font.c \
+  config.c \
+  conway.c \
+  menu.c \
+  storage.c \
 )
 
 CFLAGS = -std=c99
-CFLAGS += -Iheaders
+CFLAGS += -Iinclude
 CFLAGS += $(shell $(NWLINK) eadk-cflags-device)
 CFLAGS += -O3 -Wall
 CFLAGS += -ggdb

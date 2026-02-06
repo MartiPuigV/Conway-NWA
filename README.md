@@ -11,13 +11,14 @@ The `headers/eadk.h` file is not needed to compile, nwlink should handle that i 
 I still have it to peek at function prototypes and constants.
 
 The img-tool.py is a python script to turn a black and white image into
-a conway pattern file (intended to be used as external data for the NWA)
+a conway pattern file that you can later load to your calculator using
+[this](https://yaya-cout.github.io/Numworks-connector/#/) handy tool.
+The resulting file should have a name like patternD.cwp, with D being a
+digit 0 - 9. You can change the digit to have up to 10 patterns.
 
 **[!] Modify the script accordingly to change image and output paths [!]**
 
 The `src` folder contains an `input.txt` file, with a glider gun pattern.
-To let the NWA know to use external data, uncomment line(s) in `src/main.c`
-(Should say "Optional: ...")
 
 ## Controls
 
@@ -60,7 +61,7 @@ Green and Peach colors come from [here](https://www.deviantart.com/advancedfan20
 
 ### Resolution:
 
-IMPORTANT:: For resolution changes to apply, you must change resolution, save configuration changes with `EXE`, then quit
+**IMPORTANT**:: For resolution changes to apply, you must change resolution, save configuration changes with `EXE`, then quit
 and open the app again. The grid is created when the app opens, and needs to be reopened each time you want to change the
 resolution. Future updates might circumvent this flaw.
 
@@ -76,9 +77,6 @@ The spritesheet can be found in `resources/font.png`, and is of course free to u
 Ranked by priority
 
 - Add panel to view all settings and savefiles
-- Code cleanup & split `src/main.c` into multiple `.c` and `.h` files
-- Add icon
-- Add custom font
 - Add ctrl+z
 - Minor speed improvements
 - Add tiny animations
