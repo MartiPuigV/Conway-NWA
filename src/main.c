@@ -158,13 +158,12 @@ int main(int argc, char* argv[]) {
 
         if (eadk_keyboard_key_down(kb, eadk_event_ok) && !select) {
             pause = !pause;
+            if (!pause) clear_cursors(buffer_main, cursor, selection, false);
             eadk_timing_msleep(MENU_MS_DELAY); // Add delay to be usable
         }
 
         // Handle pause / menu
         if (pause) {
-
-
             // Handle movement and cell modifications
             int x   = (eadk_keyboard_key_down(kb, eadk_event_right)     - eadk_keyboard_key_down(kb, eadk_event_left));
             int y   = (eadk_keyboard_key_down(kb, eadk_event_down)      - eadk_keyboard_key_down(kb, eadk_event_up));
@@ -173,7 +172,7 @@ int main(int argc, char* argv[]) {
             int sc  = (eadk_keyboard_key_down(kb, eadk_event_left_parenthesis) - eadk_keyboard_key_down(kb, eadk_event_right_parenthesis));
             // Scale
 
-            if (!kb) {
+            if (!kb && !select) {
                 if (menu_action) {
                     display_draw_cells(buffer_main);
                     display_cursors(buffer_main, cursor, selection, select);
@@ -258,7 +257,7 @@ int main(int argc, char* argv[]) {
                 display_message(FONT ? "font: pixel" : "font: basic", 11);
             }
 
-            if (!x && !y) continue;
+            // if (!x && !y) continue;
 
             clear_cursors(buffer_main, cursor, selection, select);
 
