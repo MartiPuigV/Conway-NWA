@@ -178,6 +178,8 @@ int main(int argc, char* argv[]) {
                     display_cursors(buffer_main, cursor, selection, select);
                 }
                 menu_action = false;
+                step_lock = false;
+                panel_lock = false;
                 continue;
             }
 
