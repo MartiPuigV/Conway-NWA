@@ -117,11 +117,7 @@ int main(int argc, char* argv[]) {
 
     // Selection tool for copy/paste
     eadk_rect_t selection = {0};
-<<<<<<< HEAD
-    uint8_t cursor_speed = 5;
-=======
     uint8_t cursor_speed = (7-SCALE_IDX);
->>>>>>> 1623126 (Visual improvements and fixes)
 
     // First screen reset
     eadk_display_push_rect_uniform(eadk_screen_rect, DEAD_COLOR);
