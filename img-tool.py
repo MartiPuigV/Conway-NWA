@@ -1,6 +1,7 @@
 from PIL import Image
 
 def load_img(img_path:str):
+    # Turn image into pixel array, height and width
     img = Image.open(img_path).convert('L')
     w, h = img.size
     print("height, width", (h, w))
@@ -8,9 +9,8 @@ def load_img(img_path:str):
 
     return pixels, h, w
 
-def rle_encode(pixels:list[int], width: int):
-    # Will generate the file required to turn pixels into .cwp file for external data
-    # Conway NWA can be compiled to allow for external data, and treats it as a pattern file
+def rle_encode(pixels:list[int], width: int, out_path:str):
+    # Will generate the .cwp file that you can load onto the calculator
     streak = 1
     px = pixels[0]
     res = [((px != 0) << 7) | (width > 255), width%256]
@@ -30,11 +30,13 @@ def rle_encode(pixels:list[int], width: int):
     if streak > 0:
         res.append(streak)
 
-    print(res, len(res))
+    # print(res, len(res))
+    print("File size in bytes:", len(res))
 
-    with open("src/input.txt", "w") as file: # Adapt output path, use this is compiling for pattern as external data
+    with open(out_path, "w") as file:
         file.write(''.join(chr(r) for r in res))
 
 pixels, H, W = load_img('resources/glider_gun.png') # Use your own image path
-rle_encode(pixels, W)
+rle_encode(pixels, W, "src/pattern0.cwp") # You can change the path
+
 

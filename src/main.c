@@ -10,6 +10,9 @@
 #include <string.h>
 #include <stdbool.h>
 
+const char eadk_app_name[] __attribute__((section(".rodata.eadk_app_name"))) = "Conway";
+const uint32_t eadk_api_level  __attribute__((section(".rodata.eadk_api_level"))) = 0;
+
 // Declare config before macros
 extern const char* CONFIG_FILE;
 
@@ -23,7 +26,9 @@ int FONT; // 0, 1 : Base, custom [font]
 
 
 /* Constants and types */
-const int MENU_MS_DELAY = 500;
+typedef uint8_t cell_t;
+
+const int MENU_MS_DELAY = 250;
 const int AREA_MAX = 160 * 120;
 // The calculator's memory, with no other files, can support around 6 patterns of
 // size AREA_MAX, with worst RLE configuration (alternating pixels)
@@ -33,6 +38,7 @@ const eadk_color_t CURSOR_COLOR = 0xFCD5; // Pink
 // make it hard to see where the cursor is aligned. Full red
 // cursor appears to end higher than it should since red is
 // the first channel
+
 eadk_color_t CELL_COLOR = 0xFFFF;
 eadk_color_t DEAD_COLOR = 0x0000;
 eadk_color_t DIFF_COLOR = 0xFFFF;
@@ -57,12 +63,40 @@ const eadk_event_t numpad[10] = {
     48, 42, 43, 44, 36, 37, 38, 30, 31, 32 // Numpad events, 0-9
 };
 
-const char eadk_app_name[] __attribute__((section(".rodata.eadk_app_name"))) = "Conway";
-const uint32_t eadk_api_level  __attribute__((section(".rodata.eadk_api_level"))) = 0;
 
+inline void clear_cursors(cell_t* buffer_main, eadk_point_t cursor, eadk_rect_t selection, bool select) {
+    // Clear cursor and selection corners
+    eadk_display_push_rect_uniform(
+        (eadk_rect_t){ cursor.x*SCALE, cursor.y*SCALE, SCALE, SCALE },
+        (DIFF_COLOR) * buffer_main[ IDX( cursor.x, cursor.y ) ] + DEAD_COLOR
+    );
 
+    if (!select) return;
 
-typedef uint8_t cell_t;
+    eadk_display_push_rect_uniform(
+        (eadk_rect_t){ selection.x*SCALE, selection.y*SCALE, SCALE, SCALE },
+        (DIFF_COLOR) * buffer_main[ IDX( selection.x, selection.y ) ] + DEAD_COLOR
+    );
+    eadk_display_push_rect_uniform(
+        (eadk_rect_t){ cursor.x*SCALE, selection.y*SCALE, SCALE, SCALE },
+        (DIFF_COLOR) * buffer_main[ IDX( cursor.x, selection.y ) ] + DEAD_COLOR
+    );
+    eadk_display_push_rect_uniform(
+        (eadk_rect_t){ selection.x*SCALE, cursor.y*SCALE, SCALE, SCALE },
+        (DIFF_COLOR) * buffer_main[ IDX( selection.x, cursor.y ) ] + DEAD_COLOR
+    );
+}
+
+inline void display_cursors(cell_t* buffer_main, eadk_point_t cursor, eadk_rect_t selection, bool select) {
+    // Display cursor and selection corners
+    eadk_display_push_rect_uniform((eadk_rect_t){ cursor.x*SCALE, cursor.y*SCALE, SCALE, SCALE }, CURSOR_COLOR);
+
+    if (!select) return;
+
+    eadk_display_push_rect_uniform((eadk_rect_t){ selection.x*SCALE, selection.y*SCALE, SCALE, SCALE }, CURSOR_COLOR);
+    eadk_display_push_rect_uniform((eadk_rect_t){ cursor.x*SCALE, selection.y*SCALE, SCALE, SCALE }, CURSOR_COLOR);
+    eadk_display_push_rect_uniform((eadk_rect_t){ selection.x*SCALE, cursor.y*SCALE, SCALE, SCALE }, CURSOR_COLOR);
+}
 
 int main(int argc, char* argv[]) {
     // Load config
@@ -83,33 +117,39 @@ int main(int argc, char* argv[]) {
 
     // Selection tool for copy/paste
     eadk_rect_t selection = {0};
-    uint8_t cursor_speed = 4;
+    uint8_t cursor_speed = 5;
 
     // First screen reset
     eadk_display_push_rect_uniform(eadk_screen_rect, DEAD_COLOR);
 
     // Allocate buffers
-    cell_t* buffer_main     = calloc(H * W, sizeof(cell_t));
-    cell_t* buffer_alt      = calloc(2 * W, sizeof(cell_t));
+    cell_t* buffer_main = calloc(H * W, sizeof(cell_t));
+    cell_t* buffer_alt  = calloc(2 * W, sizeof(cell_t));
 
     // Should not happen ... but if it does, starting simulation will reset!
     if (buffer_main == NULL || buffer_alt == NULL) {
-        eadk_display_draw_string("alloc failed... quit app", (eadk_point_t){ 0, 0 }, true, eadk_color_red, eadk_color_black);
+        eadk_display_draw_string(
+            "alloc failed... quit app",
+            (eadk_point_t){ 0, 0 },
+            true, eadk_color_red, eadk_color_black
+        );
         eadk_timing_msleep(5000);
     }
 
     // (Optional) Obsolete: load pattern from external_data (just use Upsilon Connector)
     // cells_insert_pattern(buffer_main, eadk_external_data, eadk_external_data_size, 0, 0);
     display_draw_cells(buffer_main);
+    display_cursors(buffer_main, cursor, selection, false);
 
     // Menu flags
     bool pause = true;
     bool select = false;
     bool step_lock = false;
     bool panel_lock = false;
+    bool menu_action = false;
 
     // Avoid app opening to cause keydown(OK)
-    eadk_timing_msleep(MENU_MS_DELAY/2);
+    eadk_timing_msleep(MENU_MS_DELAY);
 
     while (true) {
         // Add option to toggle vblank ?
@@ -123,6 +163,8 @@ int main(int argc, char* argv[]) {
 
         // Handle pause / menu
         if (pause) {
+
+
             // Handle movement and cell modifications
             int x   = (eadk_keyboard_key_down(kb, eadk_event_right)     - eadk_keyboard_key_down(kb, eadk_event_left));
             int y   = (eadk_keyboard_key_down(kb, eadk_event_down)      - eadk_keyboard_key_down(kb, eadk_event_up));
@@ -130,6 +172,17 @@ int main(int argc, char* argv[]) {
             int ms  = (eadk_keyboard_key_down(kb, eadk_event_plus)      - eadk_keyboard_key_down(kb, eadk_event_minus));
             int sc  = (eadk_keyboard_key_down(kb, eadk_event_left_parenthesis) - eadk_keyboard_key_down(kb, eadk_event_right_parenthesis));
             // Scale
+
+            if (!kb) {
+                if (menu_action) {
+                    display_draw_cells(buffer_main);
+                    display_cursors(buffer_main, cursor, selection, select);
+                }
+                menu_action = false;
+                continue;
+            }
+
+            menu_action = true;
 
             // Color palette change
             if (eadk_keyboard_key_down(kb, eadk_event_alpha)) {
@@ -150,12 +203,10 @@ int main(int argc, char* argv[]) {
 
             if (ms != 0) { // Change time interval between frames
                 _menu_ms(ms);
-                display_draw_cells(buffer_main);
             }
 
             if (sc != 0) {
                 _menu_scale(sc);
-                display_draw_cells(buffer_main);
             }
 
             // Copy entire screen
@@ -165,14 +216,12 @@ int main(int argc, char* argv[]) {
 
                 if (status) display_message("copied entire screen", 20);
 
-                display_draw_cells(buffer_main);
             }
 
             // Change pasting mode Strict/Normal
             if (eadk_keyboard_key_down(kb, eadk_event_division)) {
                 STRICT_PASTE = !STRICT_PASTE;
                 display_message(STRICT_PASTE ? "pasting: strict mode" : "pasting: transparent", 20);
-                display_draw_cells(buffer_main);
             }
 
             // Pasting pattern from memory
@@ -184,7 +233,6 @@ int main(int argc, char* argv[]) {
             // Save config
             if (eadk_keyboard_key_down(kb, eadk_event_exe)) {
                 _menu_save_config();
-                display_draw_cells(buffer_main);
             }
 
             // Handle stepping
@@ -198,6 +246,7 @@ int main(int argc, char* argv[]) {
             // Handle panel display
             if (eadk_keyboard_key_down(kb, eadk_event_var) && !panel_lock) {
                 // @fixme
+                //_menu_panel();
                 ;
             }
 
@@ -207,8 +256,11 @@ int main(int argc, char* argv[]) {
             if (eadk_keyboard_key_down(kb, eadk_event_ln)) {
                 FONT = !FONT;
                 display_message(FONT ? "font: pixel" : "font: basic", 11);
-                display_draw_cells(buffer_main);
             }
+
+            if (!x && !y) continue;
+
+            clear_cursors(buffer_main, cursor, selection, select);
 
             // Update cursor position
             if (x) cursor.x = (cursor.x + x + W) % W;
@@ -238,38 +290,10 @@ int main(int argc, char* argv[]) {
                 eadk_timing_msleep(MENU_MS_DELAY); // Pause to avoid instant toggling
             } // end if (shift)
 
-            // Display cursor and selection corners
-            eadk_display_push_rect_uniform((eadk_rect_t){ cursor.x*SCALE, cursor.y*SCALE, SCALE, SCALE }, CURSOR_COLOR);
-
-            if (select) {
-                eadk_display_push_rect_uniform((eadk_rect_t){ selection.x*SCALE, selection.y*SCALE, SCALE, SCALE }, CURSOR_COLOR);
-                eadk_display_push_rect_uniform((eadk_rect_t){ cursor.x*SCALE, selection.y*SCALE, SCALE, SCALE }, CURSOR_COLOR);
-                eadk_display_push_rect_uniform((eadk_rect_t){ selection.x*SCALE, cursor.y*SCALE, SCALE, SCALE }, CURSOR_COLOR);
-            }
+            display_cursors(buffer_main, cursor, selection, select);
 
             // Framerate in menu, resulting in speed of cursor. Switch to delta time please
             eadk_timing_msleep(MENU_MS_DELAY/cursor_speed);
-
-            // Clear cursor and selection corners
-            eadk_display_push_rect_uniform(
-                (eadk_rect_t){ cursor.x*SCALE, cursor.y*SCALE, SCALE, SCALE },
-                (DIFF_COLOR) * buffer_main[ IDX( cursor.x, cursor.y ) ] + DEAD_COLOR
-            );
-
-            if (select) {
-                eadk_display_push_rect_uniform(
-                    (eadk_rect_t){ selection.x*SCALE, selection.y*SCALE, SCALE, SCALE },
-                    (DIFF_COLOR) * buffer_main[ IDX( selection.x, selection.y ) ] + DEAD_COLOR
-                );
-                eadk_display_push_rect_uniform(
-                    (eadk_rect_t){ cursor.x*SCALE, selection.y*SCALE, SCALE, SCALE },
-                    (DIFF_COLOR) * buffer_main[ IDX( cursor.x, selection.y ) ] + DEAD_COLOR
-                );
-                eadk_display_push_rect_uniform(
-                    (eadk_rect_t){ selection.x*SCALE, cursor.y*SCALE, SCALE, SCALE },
-                    (DIFF_COLOR) * buffer_main[ IDX( selection.x, cursor.y ) ] + DEAD_COLOR
-                );
-            }
             // end if (pause)
         } else { // !pause, AKA run simulation
             step(buffer_main, buffer_alt);
@@ -279,3 +303,4 @@ int main(int argc, char* argv[]) {
 
     return 0;
 }
+

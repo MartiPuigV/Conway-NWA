@@ -6,6 +6,7 @@
 
 #include <eadk.h>
 #include <stdlib.h>
+#include <string.h>
 
 typedef uint8_t cell_t;
 
@@ -128,9 +129,9 @@ void _menu_ms(int ms) {
 
     char msg[] = "[,] 000 ms.frame";
     msg[1] -= ms; // Same magic as above
-    msg[4] = (FRAME_MS / 100)      + '0';
-    msg[5] = (FRAME_MS / 10 ) % 10 + '0';
-    msg[6] = (FRAME_MS % 10 )      + '0';
+    msg[4] += (FRAME_MS / 100);
+    msg[5] += (FRAME_MS / 10 ) % 10;
+    msg[6] += (FRAME_MS) % 10;
 
     display_message(msg, 16);
 }
@@ -148,5 +149,60 @@ int _menu_await_numpad() {
         numpad = eadk_event_to_numpad(key);
         if (numpad != -1) return numpad;
     }
+}
+
+void _menu_panel() {
+    // Currently broken
+    return;
+
+    // Palette Frame ms, Scale, Strict paste, Font
+    const int scale = 2;
+
+    char palette_str[] = "palette: white";
+    if (COLOR_IDX == 1) {
+        strcpy(palette_str+9, "green\0");
+    } else if (COLOR_IDX == 2) {
+        strcpy(palette_str+9, "peach\0");
+    }
+
+    display_string(
+        palette_str, 14,
+        (eadk_point_t){ 160 - 7*10, 40 },
+        scale, CELL_COLOR, DEAD_COLOR
+    );
+
+    char frame_ms_str[] = "ms.frame: 000";
+    frame_ms_str[10] += (FRAME_MS / 100);
+    frame_ms_str[11] += (FRAME_MS / 10 ) % 10;
+    frame_ms_str[12] += (FRAME_MS) % 10;
+
+    display_string(
+        frame_ms_str, 13,
+        (eadk_point_t) { 160 - 6*10, 70 },
+        scale, CELL_COLOR, DEAD_COLOR
+    );
+
+    char scale_str[] = "scale: 0";
+    scale_str[7] += SCALE;
+
+    display_string(
+        scale_str, 8,
+        (eadk_point_t){ 160 - 4*10, 100 },
+        scale, CELL_COLOR, DEAD_COLOR
+    );
+
+    display_string(
+        (STRICT_PASTE ? "paste: strict mode" : "paste: transparent"), 18,
+        (eadk_point_t){ 160 - 9*10, 130 },
+        scale, CELL_COLOR, DEAD_COLOR
+    );
+
+    display_string(
+        (FONT ? "font: pixel" : "font: basic"), 11,
+        (eadk_point_t){ 160 - 5*10, 160 },
+        scale, CELL_COLOR, DEAD_COLOR
+    );
+
+    eadk_timing_msleep(MENU_MS_DELAY);
 }
 

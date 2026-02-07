@@ -1,13 +1,13 @@
 # Conway-NWA
 
-Conway's Game of Life as a Numworks App (NWA), version 1.2.1
+Conway's Game of Life as a Numworks App (NWA), version 1.2.2
 
 The NWA binary is not provided here yet. You can compile it yourself by following
 the instructions at Nwagyu (link below) on how to setup your environment, then running
 
 `make run`
 
-The `headers/eadk.h` file is not needed to compile, nwlink should handle that i believe.
+The `include/eadk.h` file is not needed to compile, nwlink should handle that i believe.
 I still have it to peek at function prototypes and constants.
 
 The img-tool.py is a python script to turn a black and white image into
@@ -18,7 +18,8 @@ digit 0 - 9. You can change the digit to have up to 10 patterns.
 
 **[!] Modify the script accordingly to change image and output paths [!]**
 
-The `src` folder contains an `input.txt` file, with a glider gun pattern.
+The `src` folder should contain `pattern0.cwp`, with a glider gun pattern.
+You can use any digit instead of the 0 and load it onto the calculator to use.
 
 ## Controls
 
@@ -77,7 +78,7 @@ The spritesheet can be found in `resources/font.png`, and is of course free to u
 Ranked by priority
 
 - Add panel to view all settings and savefiles
-- Add ctrl+z
+- Add ctrl+z (undo)
 - Minor speed improvements
 - Add tiny animations
 - Add cell fade / prediction
@@ -85,7 +86,7 @@ Ranked by priority
 ## Aknowledgements
 
 Thanks to [Yaya-Cout](https://github.com/Yaya-Cout) for creating the amazing nwagyu website and the
-storage library (here, src/storage.c and headers/storage.h).
+storage library (here, `src/storage.c` and `include/storage.h`).
 
 Thanks to anyone who contributed NWA's and inspired me to do this. I tried near all of them and each one
 amazes me more than the previous. Go check them out at [Nwagyu](https://yaya-cout.github.io/Nwagyu/).

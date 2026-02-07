@@ -35,5 +35,7 @@ void _menu_ms(int ms);
 
 int _menu_await_numpad();
 
+void _menu_panel();
+
 #endif // MENU_H_
 
