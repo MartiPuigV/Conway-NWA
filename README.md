@@ -1,10 +1,6 @@
 # Conway-NWA
 
-<<<<<<< HEAD
 Conway's Game of Life as a Numworks App (NWA), version 1.2.3
-=======
-Conway's Game of Life as a Numworks App (NWA), version 1.2.2
->>>>>>> 81c2681c83c70720697faa0db67fa8241058da3e
 
 The NWA binary is not provided here yet. You can compile it yourself by following
 the instructions at Nwagyu (link below) on how to setup your environment, then running
@@ -44,10 +40,7 @@ You can use any digit instead of the 0 and load it onto the calculator to use.
 | `Back`                | Step one iteration of the simulation                         |
 | `Shift` + `Backspace` | Kill all cells                                               |
 | `Ln`                  | Toggle custom pixel font                                     |
-<<<<<<< HEAD
 | `e^x`                 | Toggle wrap on borders                                       |
-=======
->>>>>>> 81c2681c83c70720697faa0db67fa8241058da3e
 
 ## Details
 
@@ -81,14 +74,11 @@ Changes how many pixels wide a cell is. The available resolutions as of 1.2.0 ar
 The pixel font is a 4x4 font containing the basic characters needed. It's a mix of two fonts, both can be found below in Aknowledgements.
 The spritesheet can be found in `resources/font.png`, and is of course free to use.
 
-<<<<<<< HEAD
 ### Wrapping
 
 If enabled, wrapping prevents moving structures like gliders from dying when they encounter a border. They will reappear on the other side.
 Wrapping works both horizontally and vertically.
 
-=======
->>>>>>> 81c2681c83c70720697faa0db67fa8241058da3e
 ## Future updates and planned fixes
 
 Ranked by priority
