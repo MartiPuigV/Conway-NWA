@@ -109,6 +109,7 @@ int main(int argc, char* argv[]) {
     FRAME_MS = CONFIG.frame_ms;
     STRICT_PASTE = CONFIG.strict_paste;
     FONT = CONFIG.font;
+    WRAP = CONFIG.wrap;
 
     CELL_COLOR = cell_colors[COLOR_IDX];
     DEAD_COLOR = dead_colors[COLOR_IDX];
