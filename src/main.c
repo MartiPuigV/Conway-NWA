@@ -223,7 +223,6 @@ int main(int argc, char* argv[]) {
             // Copy entire screen
             if (eadk_keyboard_key_down(kb, eadk_event_multiplication)) {
                 select = false;
-
                 int numpad = _menu_await_numpad();
                 bool status = _menu_copy_pattern(buffer_main, (eadk_rect_t){ 0, 0, W, H }, numpad);
 
@@ -234,7 +233,6 @@ int main(int argc, char* argv[]) {
             // Change pasting mode Strict/Normal
             if (eadk_keyboard_key_down(kb, eadk_event_division)) {
                 select = false;
-
                 STRICT_PASTE = !STRICT_PASTE;
                 display_message(STRICT_PASTE ? "pasting: strict mode" : "pasting: transparent", 20);
             }
@@ -242,7 +240,6 @@ int main(int argc, char* argv[]) {
             // Pasting pattern from memory
             if (eadk_keyboard_key_down(kb, eadk_event_ans)) {
                 select = false;
-
                 int numpad = _menu_await_numpad();
                 _menu_paste_pattern(buffer_main, cursor, numpad);
             }
